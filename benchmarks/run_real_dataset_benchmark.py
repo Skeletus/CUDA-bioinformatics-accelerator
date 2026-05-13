@@ -13,8 +13,8 @@ ACCESSION = "NC_045512.2"
 DEFAULT_FASTA_PATH = Path("data/raw/sars_cov_2_NC_045512_2.fasta")
 DEFAULT_FRAGMENT_CSV_PATH = Path("data/processed/sars_cov_2_fragments_128.csv")
 DEFAULT_FRAGMENT_TXT_PATH = Path("data/sars_cov_2_fragments_128.txt")
-DEFAULT_PAIR_PATH = Path("data/processed/sars_cov_2_pairs_128_stride_32.txt")
 DEFAULT_BENCHMARK_CSV_PATH = Path("benchmarks/real_dataset_hamming_benchmark_results.csv")
+PAIRING_MODES = ("adjacent", "all_vs_all", "sampled", "mutated_queries")
 
 
 CSV_FIELDNAMES = [
@@ -23,6 +23,11 @@ CSV_FIELDNAMES = [
     "genome_length",
     "window_size",
     "stride",
+    "pairing_mode",
+    "pairs_per_fragment",
+    "max_pairs",
+    "mutation_rate",
+    "seed",
     "number_of_fragments",
     "number_of_pairs",
     "sequence_length",
@@ -38,6 +43,9 @@ CSV_FIELDNAMES = [
     "encoded_total_speedup",
     "char_passed",
     "encoded_passed",
+    "pair_generation_truncated",
+    "total_bases_mutated",
+    "observed_mutation_rate",
 ]
 
 
@@ -45,6 +53,26 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Benchmark Hamming Distance on real SARS-CoV-2 fragments.")
     parser.add_argument("--window-size", type=int, default=128, help="Sliding window size.")
     parser.add_argument("--stride", type=int, default=32, help="Sliding window stride.")
+    parser.add_argument(
+        "--pairing-mode",
+        choices=PAIRING_MODES,
+        default="adjacent",
+        help="Real dataset pair generation mode.",
+    )
+    parser.add_argument(
+        "--pairs-per-fragment",
+        type=int,
+        default=64,
+        help="Number of sampled or mutated pairs generated per source fragment.",
+    )
+    parser.add_argument("--max-pairs", type=int, default=1_000_000, help="Maximum number of generated pairs.")
+    parser.add_argument(
+        "--mutation-rate",
+        type=float,
+        default=0.05,
+        help="Per-base mutation probability for mutated_queries mode.",
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducible pair generation.")
     parser.add_argument("--repetitions", type=int, default=5, help="Number of benchmark repetitions.")
     parser.add_argument("--output", type=Path, default=DEFAULT_BENCHMARK_CSV_PATH, help="Output benchmark CSV path.")
     return parser.parse_args()
@@ -194,6 +222,11 @@ def build_row(
     genome_length: int,
     window_size: int,
     stride: int,
+    pairing_mode: str,
+    pairs_per_fragment: int,
+    max_pairs: int,
+    mutation_rate: float,
+    seed: int,
     number_of_fragments: int,
     number_of_pairs: int,
     sequence_length: int,
@@ -204,6 +237,9 @@ def build_row(
     encoded_gpu_total_time_ms: float,
     char_passed: bool,
     encoded_passed: bool,
+    pair_generation_truncated: bool,
+    total_bases_mutated: int,
+    observed_mutation_rate: float,
 ) -> dict[str, str | int | float]:
     total_bases_compared = number_of_pairs * sequence_length
     return {
@@ -212,6 +248,11 @@ def build_row(
         "genome_length": genome_length,
         "window_size": window_size,
         "stride": stride,
+        "pairing_mode": pairing_mode,
+        "pairs_per_fragment": pairs_per_fragment,
+        "max_pairs": max_pairs,
+        "mutation_rate": mutation_rate,
+        "seed": seed,
         "number_of_fragments": number_of_fragments,
         "number_of_pairs": number_of_pairs,
         "sequence_length": sequence_length,
@@ -227,6 +268,9 @@ def build_row(
         "encoded_total_speedup": safe_divide(cpu_time_ms, encoded_gpu_total_time_ms),
         "char_passed": str(char_passed).lower(),
         "encoded_passed": str(encoded_passed).lower(),
+        "pair_generation_truncated": str(pair_generation_truncated).lower(),
+        "total_bases_mutated": total_bases_mutated,
+        "observed_mutation_rate": observed_mutation_rate,
     }
 
 
@@ -238,10 +282,13 @@ def main() -> int:
 
     fragment_csv_path = project_root / f"data/processed/sars_cov_2_fragments_{arguments.window_size}.csv"
     fragment_txt_path = project_root / f"data/sars_cov_2_fragments_{arguments.window_size}.txt"
-    pair_path = project_root / f"data/processed/sars_cov_2_pairs_{arguments.window_size}_stride_{arguments.stride}.txt"
-    cpu_output_path = result_directory / "real_dataset_hamming_cpu.csv"
-    char_output_path = result_directory / "real_dataset_hamming_gpu_char.csv"
-    encoded_output_path = result_directory / "real_dataset_hamming_gpu_encoded.csv"
+    pair_path = (
+        project_root
+        / f"data/processed/sars_cov_2_pairs_{arguments.window_size}_stride_{arguments.stride}_{arguments.pairing_mode}.txt"
+    )
+    cpu_output_path = result_directory / f"real_dataset_hamming_cpu_{arguments.pairing_mode}.csv"
+    char_output_path = result_directory / f"real_dataset_hamming_gpu_char_{arguments.pairing_mode}.csv"
+    encoded_output_path = result_directory / f"real_dataset_hamming_gpu_encoded_{arguments.pairing_mode}.csv"
 
     if not (project_root / DEFAULT_FASTA_PATH).exists():
         download_run = run_command(
@@ -276,6 +323,16 @@ def main() -> int:
             str(arguments.window_size),
             "--stride",
             str(arguments.stride),
+            "--pairing-mode",
+            arguments.pairing_mode,
+            "--pairs-per-fragment",
+            str(arguments.pairs_per_fragment),
+            "--max-pairs",
+            str(arguments.max_pairs),
+            "--mutation-rate",
+            str(arguments.mutation_rate),
+            "--seed",
+            str(arguments.seed),
             "--skip-ambiguous",
         ],
         project_root,
@@ -285,6 +342,9 @@ def main() -> int:
     genome_length = parse_int(fragment_values, "GENOME_LENGTH")
     number_of_fragments = parse_int(fragment_values, "NUMBER_OF_FRAGMENTS")
     number_of_pairs = parse_int(fragment_values, "NUMBER_OF_PAIRS")
+    pair_generation_truncated = fragment_values.get("PAIR_GENERATION_TRUNCATED", "false").lower() == "true"
+    total_bases_mutated = parse_int(fragment_values, "TOTAL_BASES_MUTATED")
+    observed_mutation_rate = parse_float(fragment_values, "OBSERVED_MUTATION_RATE")
 
     cpu_binary, char_gpu_binary, encoded_gpu_binary = compile_programs(project_root)
 
@@ -303,6 +363,11 @@ def main() -> int:
             genome_length=genome_length,
             window_size=arguments.window_size,
             stride=arguments.stride,
+            pairing_mode=arguments.pairing_mode,
+            pairs_per_fragment=arguments.pairs_per_fragment,
+            max_pairs=arguments.max_pairs,
+            mutation_rate=arguments.mutation_rate,
+            seed=arguments.seed,
             number_of_fragments=number_of_fragments,
             number_of_pairs=number_of_pairs,
             sequence_length=sequence_length,
@@ -313,6 +378,9 @@ def main() -> int:
             encoded_gpu_total_time_ms=0.0,
             char_passed=False,
             encoded_passed=False,
+            pair_generation_truncated=pair_generation_truncated,
+            total_bases_mutated=total_bases_mutated,
+            observed_mutation_rate=observed_mutation_rate,
         )
         write_benchmark_csv(row, project_root / arguments.output)
         return 1
@@ -366,6 +434,11 @@ def main() -> int:
         genome_length=genome_length,
         window_size=arguments.window_size,
         stride=arguments.stride,
+        pairing_mode=arguments.pairing_mode,
+        pairs_per_fragment=arguments.pairs_per_fragment,
+        max_pairs=arguments.max_pairs,
+        mutation_rate=arguments.mutation_rate,
+        seed=arguments.seed,
         number_of_fragments=number_of_fragments,
         number_of_pairs=number_of_pairs,
         sequence_length=sequence_length,
@@ -376,6 +449,9 @@ def main() -> int:
         encoded_gpu_total_time_ms=encoded_gpu_total_time_ms,
         char_passed=char_passed,
         encoded_passed=encoded_passed,
+        pair_generation_truncated=pair_generation_truncated,
+        total_bases_mutated=total_bases_mutated,
+        observed_mutation_rate=observed_mutation_rate,
     )
     write_benchmark_csv(row, project_root / arguments.output)
     print(f"Benchmark results saved to: {project_root / arguments.output}")

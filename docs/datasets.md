@@ -57,9 +57,26 @@ fragment 2: bases 64..191
 
 Fixed-length fragments are used because the current CPU and CUDA Hamming implementations require both sequences in each pair to have the same length.
 
-## Adjacent Pairs
+## Real Dataset Pair Generation Modes
 
-The pair generator compares neighboring genome windows:
+Phase 7 now supports several pair generation modes. Each mode writes the same Hamming-compatible pair format:
+
+```text
+sequenceA sequenceB
+sequenceA sequenceB
+```
+
+The pair files can be passed directly to:
+
+```text
+hamming_cpu
+hamming_gpu
+hamming_gpu_encoded
+```
+
+### adjacent
+
+Adjacent mode compares neighboring genome windows:
 
 ```text
 fragment_0 fragment_1
@@ -67,20 +84,46 @@ fragment_1 fragment_2
 fragment_2 fragment_3
 ```
 
-This creates real genomic sequence pairs while preserving the existing pair-based input format:
+This mode is biologically intuitive because nearby windows come from neighboring genome positions. It is useful as a baseline, but it creates only `number_of_fragments - 1` pairs. For the SARS-CoV-2 reference genome with a 128-base window and stride 32, that workload is too small for meaningful GPU scalability analysis.
+
+### all_vs_all
+
+All-vs-all mode compares every fragment against every other fragment while excluding self-pairs:
 
 ```text
-sequenceA sequenceB
-sequenceA sequenceB
+fragment_i fragment_j
+i != j
 ```
 
-The same pair file can be passed directly to:
+For `N` fragments, this creates `N * (N - 1)` possible pairs. This is much larger than adjacent mode and is better for GPU scalability studies. Use `--max-pairs` to prevent runaway output sizes.
+
+### sampled
+
+Sampled mode randomly samples a fixed number of target fragments for each source fragment. The default is:
 
 ```text
-hamming_cpu
-hamming_gpu
-hamming_gpu_encoded
+--pairs-per-fragment 64
 ```
+
+For each source fragment, the generator samples unique targets and never pairs a fragment with itself. Pair `(i, j)` and pair `(j, i)` can both appear. This mode is the recommended default for meaningful GPU benchmarking because it provides a larger workload than adjacent mode without expanding as aggressively as all-vs-all mode.
+
+### mutated_queries
+
+Mutated queries mode uses real SARS-CoV-2 fragments as sources and creates synthetic mutated copies as query targets. For each base, the generator mutates with probability `--mutation-rate`. Mutations use only `A`, `C`, `G`, and `T`, and a base is never replaced with itself.
+
+This mode is useful for correctness and similarity experiments because the expected difference is controlled by the mutation rate. When `--pairs-per-fragment` is omitted in `fragment_fasta.py`, it generates one mutated pair per fragment. It can generate multiple mutated copies per fragment when `--pairs-per-fragment` is greater than 1.
+
+### Reproducibility and Size Limits
+
+The `--seed` argument makes sampled and mutated workloads reproducible. The same input FASTA, window size, stride, pairing mode, and seed produce the same pair file.
+
+The `--max-pairs` argument caps generated pairs for large modes. If generation reaches the cap, the script stops writing pairs, prints a warning, and reports:
+
+```text
+PAIR_GENERATION_TRUNCATED=true
+```
+
+This keeps all-vs-all and sampled workloads practical in Google Colab.
 
 ## Commands
 
@@ -99,25 +142,77 @@ python scripts/fragment_fasta.py \
   --input data/raw/sars_cov_2_NC_045512_2.fasta \
   --output-csv data/processed/sars_cov_2_fragments_128.csv \
   --output-txt data/sars_cov_2_fragments_128.txt \
-  --output-pairs data/processed/sars_cov_2_pairs_128_stride_32.txt \
+  --output-pairs data/processed/sars_cov_2_pairs_128_stride_32_adjacent.txt \
   --window-size 128 \
   --stride 32 \
+  --pairing-mode adjacent \
   --skip-ambiguous
 ```
 
-Run the real dataset benchmark:
+Generate sampled pairs, the recommended default for GPU benchmarking:
+
+```bash
+python scripts/fragment_fasta.py \
+  --input data/raw/sars_cov_2_NC_045512_2.fasta \
+  --output-csv data/processed/sars_cov_2_fragments_128.csv \
+  --output-txt data/sars_cov_2_fragments_128.txt \
+  --output-pairs data/processed/sars_cov_2_pairs_128_stride_32_sampled.txt \
+  --window-size 128 \
+  --stride 32 \
+  --pairing-mode sampled \
+  --pairs-per-fragment 64 \
+  --max-pairs 1000000 \
+  --seed 42 \
+  --skip-ambiguous
+```
+
+Run single-mode real dataset benchmarks:
 
 ```bash
 python benchmarks/run_real_dataset_benchmark.py \
   --window-size 128 \
   --stride 32 \
+  --pairing-mode adjacent \
   --repetitions 5
+
+python benchmarks/run_real_dataset_benchmark.py \
+  --window-size 128 \
+  --stride 32 \
+  --pairing-mode sampled \
+  --pairs-per-fragment 64 \
+  --max-pairs 1000000 \
+  --seed 42 \
+  --repetitions 5
+
+python benchmarks/run_real_dataset_benchmark.py \
+  --window-size 128 \
+  --stride 32 \
+  --pairing-mode all_vs_all \
+  --max-pairs 1000000 \
+  --repetitions 5
+
+python benchmarks/run_real_dataset_benchmark.py \
+  --window-size 128 \
+  --stride 32 \
+  --pairing-mode mutated_queries \
+  --pairs-per-fragment 4 \
+  --mutation-rate 0.05 \
+  --max-pairs 1000000 \
+  --seed 42 \
+  --repetitions 5
+```
+
+Run all pairing modes:
+
+```bash
+python benchmarks/run_real_dataset_pairing_modes_benchmark.py
 ```
 
 Generate charts:
 
 ```bash
 python scripts/plot_real_dataset_benchmark.py
+python scripts/plot_real_dataset_pairing_modes.py
 ```
 
 ## Output Files
@@ -140,22 +235,27 @@ Fragment text file:
 data/sars_cov_2_fragments_128.txt
 ```
 
-Adjacent pair file:
+Mode-specific pair files:
 
 ```text
-data/processed/sars_cov_2_pairs_128_stride_32.txt
+data/processed/sars_cov_2_pairs_128_stride_32_adjacent.txt
+data/processed/sars_cov_2_pairs_128_stride_32_all_vs_all.txt
+data/processed/sars_cov_2_pairs_128_stride_32_sampled.txt
+data/processed/sars_cov_2_pairs_128_stride_32_mutated_queries.txt
 ```
 
 Benchmark CSV:
 
 ```text
 benchmarks/real_dataset_hamming_benchmark_results.csv
+benchmarks/real_dataset_pairing_modes_benchmark_results.csv
 ```
 
 Benchmark charts:
 
 ```text
 assets/benchmark_charts/real_dataset/
+assets/benchmark_charts/real_dataset_pairing_modes/
 ```
 
 ## Current Limitations
@@ -163,8 +263,8 @@ assets/benchmark_charts/real_dataset/
 - Only `A`, `C`, `G`, and `T` bases are supported by default.
 - Ambiguous bases are rejected unless `--skip-ambiguous` is used.
 - Fragmentation uses only fixed-length windows.
-- Pair generation uses a simple adjacent-fragment strategy.
 - Phase 7 still uses Hamming Distance, not full sequence alignment.
+- Needleman-Wunsch, Smith-Waterman, and 2-bit packing are intentionally not part of Phase 7.
 
 ## Future Work
 

@@ -691,11 +691,18 @@ Current Phase 7 status:
 * The project downloads the SARS-CoV-2 reference genome `NC_045512.2` as FASTA.
 * The FASTA parser reads the header, concatenates sequence lines, and validates supported DNA bases.
 * Sliding window fragmentation generates fixed-length real genomic fragments.
-* Adjacent real genomic fragments are converted into pair-based Hamming input.
+* Multiple real dataset pairing modes generate pair-based Hamming input.
 * CPU, char-based GPU, and encoded GPU Hamming implementations can be benchmarked on real genomic pairs.
 * Benchmark results are saved to `benchmarks/real_dataset_hamming_benchmark_results.csv`.
 * Real dataset charts are saved to `assets/benchmark_charts/real_dataset/`.
 * Phase 7 still uses Hamming Distance and does not implement Needleman-Wunsch, Smith-Waterman, or 2-bit packing.
+
+Phase 7 pair generation modes:
+
+* `adjacent`: compares fragment `i` with fragment `i + 1`. This is simple and biologically intuitive, but the workload is small.
+* `all_vs_all`: compares every fragment against every other fragment while excluding self-pairs. This creates a much larger workload and can be capped with `--max-pairs`.
+* `sampled`: samples a fixed number of target fragments per source fragment. This is the recommended default for meaningful GPU benchmarking.
+* `mutated_queries`: creates mutated copies of real fragments using `--mutation-rate`, which is useful for controlled correctness and similarity experiments.
 
 Phase 7 Colab commands:
 
@@ -708,9 +715,48 @@ Phase 7 Colab commands:
   --input data/raw/sars_cov_2_NC_045512_2.fasta \
   --output-csv data/processed/sars_cov_2_fragments_128.csv \
   --output-txt data/sars_cov_2_fragments_128.txt \
-  --output-pairs data/processed/sars_cov_2_pairs_128_stride_32.txt \
+  --output-pairs data/processed/sars_cov_2_pairs_128_stride_32_adjacent.txt \
   --window-size 128 \
   --stride 32 \
+  --pairing-mode adjacent \
+  --skip-ambiguous
+
+!python scripts/fragment_fasta.py \
+  --input data/raw/sars_cov_2_NC_045512_2.fasta \
+  --output-csv data/processed/sars_cov_2_fragments_128.csv \
+  --output-txt data/sars_cov_2_fragments_128.txt \
+  --output-pairs data/processed/sars_cov_2_pairs_128_stride_32_sampled.txt \
+  --window-size 128 \
+  --stride 32 \
+  --pairing-mode sampled \
+  --pairs-per-fragment 64 \
+  --max-pairs 1000000 \
+  --seed 42 \
+  --skip-ambiguous
+
+!python scripts/fragment_fasta.py \
+  --input data/raw/sars_cov_2_NC_045512_2.fasta \
+  --output-csv data/processed/sars_cov_2_fragments_128.csv \
+  --output-txt data/sars_cov_2_fragments_128.txt \
+  --output-pairs data/processed/sars_cov_2_pairs_128_stride_32_all_vs_all.txt \
+  --window-size 128 \
+  --stride 32 \
+  --pairing-mode all_vs_all \
+  --max-pairs 1000000 \
+  --skip-ambiguous
+
+!python scripts/fragment_fasta.py \
+  --input data/raw/sars_cov_2_NC_045512_2.fasta \
+  --output-csv data/processed/sars_cov_2_fragments_128.csv \
+  --output-txt data/sars_cov_2_fragments_128.txt \
+  --output-pairs data/processed/sars_cov_2_pairs_128_stride_32_mutated_queries.txt \
+  --window-size 128 \
+  --stride 32 \
+  --pairing-mode mutated_queries \
+  --pairs-per-fragment 4 \
+  --mutation-rate 0.05 \
+  --max-pairs 1000000 \
+  --seed 42 \
   --skip-ambiguous
 
 !g++ src/hamming_cpu.cpp -O3 -std=c++17 -I src/common -o hamming_cpu
@@ -722,9 +768,40 @@ Phase 7 Colab commands:
 !python benchmarks/run_real_dataset_benchmark.py \
   --window-size 128 \
   --stride 32 \
+  --pairing-mode adjacent \
   --repetitions 5
 
+!python benchmarks/run_real_dataset_benchmark.py \
+  --window-size 128 \
+  --stride 32 \
+  --pairing-mode sampled \
+  --pairs-per-fragment 64 \
+  --max-pairs 1000000 \
+  --seed 42 \
+  --repetitions 5
+
+!python benchmarks/run_real_dataset_benchmark.py \
+  --window-size 128 \
+  --stride 32 \
+  --pairing-mode all_vs_all \
+  --max-pairs 1000000 \
+  --repetitions 5
+
+!python benchmarks/run_real_dataset_benchmark.py \
+  --window-size 128 \
+  --stride 32 \
+  --pairing-mode mutated_queries \
+  --pairs-per-fragment 4 \
+  --mutation-rate 0.05 \
+  --max-pairs 1000000 \
+  --seed 42 \
+  --repetitions 5
+
+!python benchmarks/run_real_dataset_pairing_modes_benchmark.py
+
 !python scripts/plot_real_dataset_benchmark.py
+
+!python scripts/plot_real_dataset_pairing_modes.py
 ```
 
 ---
