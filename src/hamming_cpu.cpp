@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -13,6 +14,23 @@ struct SequencePair {
     std::string first_sequence;
     std::string second_sequence;
 };
+
+int parse_repetitions(int argc, char** argv) {
+    constexpr int default_repetitions = 5;
+    if (argc == 3) {
+        return default_repetitions;
+    }
+    if (argc == 5 && std::string(argv[3]) == "--repetitions") {
+        const int repetitions = std::stoi(argv[4]);
+        if (repetitions <= 0) {
+            throw std::runtime_error("--repetitions must be greater than zero.");
+        }
+        return repetitions;
+    }
+
+    throw std::runtime_error("Usage: " + std::string(argv[0]) +
+                             " <input_dataset> <output_csv> [--repetitions N]");
+}
 
 std::vector<SequencePair> read_sequence_pairs(const std::string& input_path, std::size_t& sequence_length) {
     std::ifstream input_file(input_path);
@@ -73,12 +91,8 @@ void write_results_csv(const std::string& output_path,
 }
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <input_dataset> <output_csv>\n";
-        return 1;
-    }
-
     try {
+        const int repetitions = parse_repetitions(argc, argv);
         const std::string input_path = argv[1];
         const std::string output_path = argv[2];
 
@@ -86,19 +100,37 @@ int main(int argc, char** argv) {
         const std::vector<SequencePair> sequence_pairs = read_sequence_pairs(input_path, sequence_length);
         std::vector<std::size_t> distances(sequence_pairs.size());
 
-        CpuTimer timer;
-        for (std::size_t pair_index = 0; pair_index < sequence_pairs.size(); ++pair_index) {
-            distances[pair_index] = dna::hamming_distance(sequence_pairs[pair_index].first_sequence,
-                                                          sequence_pairs[pair_index].second_sequence);
+        double total_cpu_time_ms = 0.0;
+        double minimum_cpu_time_ms = std::numeric_limits<double>::max();
+        for (int repetition = 0; repetition < repetitions; ++repetition) {
+            CpuTimer timer;
+            for (std::size_t pair_index = 0; pair_index < sequence_pairs.size(); ++pair_index) {
+                distances[pair_index] = dna::hamming_distance(sequence_pairs[pair_index].first_sequence,
+                                                              sequence_pairs[pair_index].second_sequence);
+            }
+            const double repetition_time_ms = timer.elapsed_milliseconds();
+            total_cpu_time_ms += repetition_time_ms;
+            if (repetition_time_ms < minimum_cpu_time_ms) {
+                minimum_cpu_time_ms = repetition_time_ms;
+            }
         }
-        const double cpu_time_ms = timer.elapsed_milliseconds();
+        const double average_cpu_time_ms = total_cpu_time_ms / static_cast<double>(repetitions);
 
         write_results_csv(output_path, distances, sequence_length);
 
         std::cout << "Number of pairs: " << sequence_pairs.size() << "\n";
         std::cout << "Sequence length: " << sequence_length << "\n";
-        std::cout << "CPU time: " << std::fixed << std::setprecision(3) << cpu_time_ms << " ms\n";
+        std::cout << "CPU average time: " << std::fixed << std::setprecision(3) << average_cpu_time_ms << " ms\n";
+        std::cout << "CPU minimum time: " << std::fixed << std::setprecision(3) << minimum_cpu_time_ms << " ms\n";
+        std::cout << "Repetitions: " << repetitions << "\n";
         std::cout << "Output path: " << output_path << "\n";
+        std::cout << std::fixed << std::setprecision(6);
+        std::cout << "CPU_TIME_MS=" << average_cpu_time_ms << "\n";
+        std::cout << "CPU_MIN_TIME_MS=" << minimum_cpu_time_ms << "\n";
+        std::cout << "NUMBER_OF_PAIRS=" << sequence_pairs.size() << "\n";
+        std::cout << "SEQUENCE_LENGTH=" << sequence_length << "\n";
+        std::cout << "REPETITIONS=" << repetitions << "\n";
+        std::cout << "OUTPUT_PATH=" << output_path << "\n";
     } catch (const std::exception& error) {
         std::cerr << "Error: " << error.what() << "\n";
         return 1;

@@ -42,6 +42,23 @@ struct Dataset {
     int sequence_length = 0;
 };
 
+int parse_repetitions(int argc, char** argv) {
+    constexpr int default_repetitions = 5;
+    if (argc == 3) {
+        return default_repetitions;
+    }
+    if (argc == 5 && std::string(argv[3]) == "--repetitions") {
+        const int repetitions = std::stoi(argv[4]);
+        if (repetitions <= 0) {
+            throw std::runtime_error("--repetitions must be greater than zero.");
+        }
+        return repetitions;
+    }
+
+    throw std::runtime_error("Usage: " + std::string(argv[0]) +
+                             " <input_dataset> <output_csv> [--repetitions N]");
+}
+
 Dataset read_dataset(const std::string& input_path) {
     std::ifstream input_file(input_path);
     if (!input_file) {
@@ -123,11 +140,6 @@ bool validate_results(const std::vector<int>& gpu_distances, const std::vector<i
 }
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <input_dataset> <output_csv>\n";
-        return 1;
-    }
-
     char* device_first_sequences = nullptr;
     char* device_second_sequences = nullptr;
     int* device_distances = nullptr;
@@ -135,6 +147,7 @@ int main(int argc, char** argv) {
     cudaEvent_t kernel_stop_event = nullptr;
 
     try {
+        const int repetitions = parse_repetitions(argc, argv);
         const std::string input_path = argv[1];
         const std::string output_path = argv[2];
         const Dataset dataset = read_dataset(input_path);
@@ -149,7 +162,6 @@ int main(int argc, char** argv) {
         CUDA_CHECK(cudaEventCreate(&kernel_start_event));
         CUDA_CHECK(cudaEventCreate(&kernel_stop_event));
 
-        CpuTimer total_timer;
         CUDA_CHECK(cudaMemcpy(device_first_sequences, dataset.first_sequences.data(), sequence_bytes,
                               cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(device_second_sequences, dataset.second_sequences.data(), sequence_bytes,
@@ -158,7 +170,6 @@ int main(int argc, char** argv) {
         const int threads_per_block = 256;
         const int blocks_per_grid = (dataset.num_pairs + threads_per_block - 1) / threads_per_block;
 
-        CUDA_CHECK(cudaEventRecord(kernel_start_event));
         hamming_distance_kernel<<<blocks_per_grid, threads_per_block>>>(
             device_first_sequences,
             device_second_sequences,
@@ -166,34 +177,90 @@ int main(int argc, char** argv) {
             dataset.num_pairs,
             dataset.sequence_length);
         CUDA_CHECK(cudaGetLastError());
-        CUDA_CHECK(cudaEventRecord(kernel_stop_event));
-        CUDA_CHECK(cudaEventSynchronize(kernel_stop_event));
+        CUDA_CHECK(cudaDeviceSynchronize());
 
-        float kernel_time_ms = 0.0f;
-        CUDA_CHECK(cudaEventElapsedTime(&kernel_time_ms, kernel_start_event, kernel_stop_event));
+        double total_kernel_time_ms = 0.0;
+        double total_gpu_time_ms = 0.0;
+        float minimum_kernel_time_ms = std::numeric_limits<float>::max();
+        double minimum_gpu_time_ms = std::numeric_limits<double>::max();
 
-        CUDA_CHECK(cudaMemcpy(gpu_distances.data(), device_distances, distance_bytes, cudaMemcpyDeviceToHost));
-        const double total_time_ms = total_timer.elapsed_milliseconds();
+        for (int repetition = 0; repetition < repetitions; ++repetition) {
+            CpuTimer total_timer;
+            CUDA_CHECK(cudaMemcpy(device_first_sequences, dataset.first_sequences.data(), sequence_bytes,
+                                  cudaMemcpyHostToDevice));
+            CUDA_CHECK(cudaMemcpy(device_second_sequences, dataset.second_sequences.data(), sequence_bytes,
+                                  cudaMemcpyHostToDevice));
+
+            CUDA_CHECK(cudaEventRecord(kernel_start_event));
+            hamming_distance_kernel<<<blocks_per_grid, threads_per_block>>>(
+                device_first_sequences,
+                device_second_sequences,
+                device_distances,
+                dataset.num_pairs,
+                dataset.sequence_length);
+            CUDA_CHECK(cudaGetLastError());
+            CUDA_CHECK(cudaEventRecord(kernel_stop_event));
+            CUDA_CHECK(cudaEventSynchronize(kernel_stop_event));
+
+            float repetition_kernel_time_ms = 0.0f;
+            CUDA_CHECK(cudaEventElapsedTime(&repetition_kernel_time_ms, kernel_start_event, kernel_stop_event));
+
+            CUDA_CHECK(cudaMemcpy(gpu_distances.data(), device_distances, distance_bytes, cudaMemcpyDeviceToHost));
+            const double repetition_total_time_ms = total_timer.elapsed_milliseconds();
+
+            total_kernel_time_ms += static_cast<double>(repetition_kernel_time_ms);
+            total_gpu_time_ms += repetition_total_time_ms;
+            if (repetition_kernel_time_ms < minimum_kernel_time_ms) {
+                minimum_kernel_time_ms = repetition_kernel_time_ms;
+            }
+            if (repetition_total_time_ms < minimum_gpu_time_ms) {
+                minimum_gpu_time_ms = repetition_total_time_ms;
+            }
+        }
+
+        const double average_kernel_time_ms = total_kernel_time_ms / static_cast<double>(repetitions);
+        const double average_gpu_total_time_ms = total_gpu_time_ms / static_cast<double>(repetitions);
 
         const bool validation_passed = validate_results(gpu_distances, dataset.cpu_distances);
         if (!validation_passed) {
-            throw std::runtime_error("GPU validation failed against CPU reference results.");
+            std::cerr << "Error: GPU validation failed against CPU reference results.\n";
         }
 
         write_results_csv(output_path, gpu_distances, dataset.sequence_length);
 
         std::cout << "Number of pairs: " << dataset.num_pairs << "\n";
         std::cout << "Sequence length: " << dataset.sequence_length << "\n";
-        std::cout << "GPU kernel time: " << std::fixed << std::setprecision(3) << kernel_time_ms << " ms\n";
-        std::cout << "GPU total time: " << std::fixed << std::setprecision(3) << total_time_ms << " ms\n";
-        std::cout << "Validation status: PASSED\n";
+        std::cout << "GPU average kernel time: " << std::fixed << std::setprecision(3) << average_kernel_time_ms
+                  << " ms\n";
+        std::cout << "GPU minimum kernel time: " << std::fixed << std::setprecision(3) << minimum_kernel_time_ms
+                  << " ms\n";
+        std::cout << "GPU average total time: " << std::fixed << std::setprecision(3) << average_gpu_total_time_ms
+                  << " ms\n";
+        std::cout << "GPU minimum total time: " << std::fixed << std::setprecision(3) << minimum_gpu_time_ms
+                  << " ms\n";
+        std::cout << "Repetitions: " << repetitions << "\n";
+        std::cout << "Validation status: " << (validation_passed ? "PASSED" : "FAILED") << "\n";
         std::cout << "Output path: " << output_path << "\n";
+        std::cout << std::fixed << std::setprecision(6);
+        std::cout << "GPU_KERNEL_TIME_MS=" << average_kernel_time_ms << "\n";
+        std::cout << "GPU_KERNEL_MIN_TIME_MS=" << minimum_kernel_time_ms << "\n";
+        std::cout << "GPU_TOTAL_TIME_MS=" << average_gpu_total_time_ms << "\n";
+        std::cout << "GPU_TOTAL_MIN_TIME_MS=" << minimum_gpu_time_ms << "\n";
+        std::cout << "NUMBER_OF_PAIRS=" << dataset.num_pairs << "\n";
+        std::cout << "SEQUENCE_LENGTH=" << dataset.sequence_length << "\n";
+        std::cout << "REPETITIONS=" << repetitions << "\n";
+        std::cout << "VALIDATION_STATUS=" << (validation_passed ? "PASSED" : "FAILED") << "\n";
+        std::cout << "OUTPUT_PATH=" << output_path << "\n";
 
         CUDA_CHECK(cudaEventDestroy(kernel_start_event));
         CUDA_CHECK(cudaEventDestroy(kernel_stop_event));
         CUDA_CHECK(cudaFree(device_first_sequences));
         CUDA_CHECK(cudaFree(device_second_sequences));
         CUDA_CHECK(cudaFree(device_distances));
+
+        if (!validation_passed) {
+            return 2;
+        }
     } catch (const std::exception& error) {
         if (kernel_start_event != nullptr) {
             cudaEventDestroy(kernel_start_event);
