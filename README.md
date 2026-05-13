@@ -676,6 +676,7 @@ scripts/download_datasets.py
 scripts/fragment_fasta.py
 data/sars_cov_2_fragments_128.txt
 docs/datasets.md
+notebooks/03_real_dataset_integration.ipynb
 ```
 
 Fragmentation example:
@@ -683,6 +684,47 @@ Fragmentation example:
 ```text
 Window size: 128
 Stride: 32
+```
+
+Current Phase 7 status:
+
+* The project downloads the SARS-CoV-2 reference genome `NC_045512.2` as FASTA.
+* The FASTA parser reads the header, concatenates sequence lines, and validates supported DNA bases.
+* Sliding window fragmentation generates fixed-length real genomic fragments.
+* Adjacent real genomic fragments are converted into pair-based Hamming input.
+* CPU, char-based GPU, and encoded GPU Hamming implementations can be benchmarked on real genomic pairs.
+* Benchmark results are saved to `benchmarks/real_dataset_hamming_benchmark_results.csv`.
+* Real dataset charts are saved to `assets/benchmark_charts/real_dataset/`.
+* Phase 7 still uses Hamming Distance and does not implement Needleman-Wunsch, Smith-Waterman, or 2-bit packing.
+
+Phase 7 Colab commands:
+
+```bash
+!python scripts/download_datasets.py \
+  --dataset sars-cov-2 \
+  --output data/raw/sars_cov_2_NC_045512_2.fasta
+
+!python scripts/fragment_fasta.py \
+  --input data/raw/sars_cov_2_NC_045512_2.fasta \
+  --output-csv data/processed/sars_cov_2_fragments_128.csv \
+  --output-txt data/sars_cov_2_fragments_128.txt \
+  --output-pairs data/processed/sars_cov_2_pairs_128_stride_32.txt \
+  --window-size 128 \
+  --stride 32 \
+  --skip-ambiguous
+
+!g++ src/hamming_cpu.cpp -O3 -std=c++17 -I src/common -o hamming_cpu
+
+!nvcc src/hamming_gpu.cu -O3 -std=c++17 -I src/common -o hamming_gpu
+
+!nvcc src/hamming_gpu_encoded.cu -O3 -std=c++17 -I src/common -o hamming_gpu_encoded
+
+!python benchmarks/run_real_dataset_benchmark.py \
+  --window-size 128 \
+  --stride 32 \
+  --repetitions 5
+
+!python scripts/plot_real_dataset_benchmark.py
 ```
 
 ---
