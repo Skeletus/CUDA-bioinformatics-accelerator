@@ -599,11 +599,58 @@ Deliverables:
 src/dna_encoding.cpp
 src/hamming_gpu_encoded.cu
 docs/dna_encoding.md
+notebooks/02_dna_encoding_optimization.ipynb
+benchmarks/run_encoding_benchmark.py
+scripts/plot_encoding_benchmarks.py
 ```
 
 Future optional optimization:
 
 Pack four DNA bases into one byte using 2-bit encoding.
+
+Current Phase 6 status:
+
+* DNA encoding helpers map `A=0`, `C=1`, `G=2`, and `T=3` using `uint8_t`.
+* Invalid DNA bases are rejected during validation or encoding.
+* The encoded CUDA Hamming implementation validates every result against a CPU encoded baseline.
+* The char-based and encoded CUDA implementations can be benchmarked on the same synthetic datasets.
+* Benchmark results are saved to `benchmarks/dna_encoding_benchmark_results.csv`.
+* Encoding benchmark charts are saved to `assets/benchmark_charts/encoding/`.
+* Phase 6 still uses fixed-length sequence pairs and does not implement 2-bit packing.
+
+Phase 6 Colab commands:
+
+```bash
+!g++ src/dna_encoding.cpp -O3 -std=c++17 -I src/common -o dna_encoding
+
+!nvcc src/hamming_gpu.cu -O3 -std=c++17 -I src/common -o hamming_gpu
+
+!nvcc src/hamming_gpu_encoded.cu -O3 -std=c++17 -I src/common -o hamming_gpu_encoded
+
+!python scripts/generate_synthetic_dataset.py \
+  --num-pairs 10000 \
+  --sequence-length 128 \
+  --output data/synthetic/synthetic_pairs_128.txt \
+  --seed 42
+
+!./dna_encoding \
+  data/synthetic/synthetic_pairs_128.txt
+
+!./hamming_gpu_encoded \
+  data/synthetic/synthetic_pairs_128.txt \
+  results/hamming/hamming_gpu_encoded_results.csv \
+  --repetitions 5
+
+!python benchmarks/run_encoding_benchmark.py
+
+!python scripts/plot_encoding_benchmarks.py
+```
+
+Additional documentation:
+
+```text
+docs/dna_encoding.md
+```
 
 ---
 
