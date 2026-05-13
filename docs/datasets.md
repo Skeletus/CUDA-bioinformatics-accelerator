@@ -213,6 +213,7 @@ Generate charts:
 ```bash
 python scripts/plot_real_dataset_benchmark.py
 python scripts/plot_real_dataset_pairing_modes.py
+python scripts/plot_encoded_timing_breakdown.py
 ```
 
 ## Output Files
@@ -256,7 +257,49 @@ Benchmark charts:
 ```text
 assets/benchmark_charts/real_dataset/
 assets/benchmark_charts/real_dataset_pairing_modes/
+assets/benchmark_charts/encoded_timing_breakdown/
 ```
+
+## Encoded Timing Breakdown
+
+The encoded GPU benchmark now reports detailed timing fields for real dataset runs. This was added because previous results showed good encoded kernel-level performance, but poor encoded total runtime. The breakdown makes it possible to see whether the overhead comes from CPU-side encoding, device allocation, memory transfers, validation, CSV writing, or other pipeline work.
+
+The key timing definitions are:
+
+```text
+GPU_KERNEL_TIME_MS = average CUDA kernel time only
+GPU_TOTAL_TIME_MS = DEVICE_ALLOCATION_TIME_MS + H2D_COPY_TIME_MS + GPU_KERNEL_TIME_MS + D2H_COPY_TIME_MS
+END_TO_END_TIME_MS = full executable pipeline time
+```
+
+`GPU_TOTAL_TIME_MS` is intentionally limited to the GPU device pipeline. It does not include FASTA pair file reading, CPU encoding, CPU reference computation, validation, or CSV writing. `END_TO_END_TIME_MS` includes all of those phases and is the right number for full executable cost.
+
+The real dataset benchmark CSV includes encoded timing columns such as:
+
+```text
+encoded_encoding_time_ms
+encoded_h2d_copy_time_ms
+encoded_gpu_kernel_time_ms
+encoded_d2h_copy_time_ms
+encoded_validation_time_ms
+encoded_csv_write_time_ms
+encoded_gpu_total_time_ms
+encoded_end_to_end_time_ms
+```
+
+Generate the breakdown charts with:
+
+```bash
+python scripts/plot_encoded_timing_breakdown.py
+```
+
+The charts are saved to:
+
+```text
+assets/benchmark_charts/encoded_timing_breakdown/
+```
+
+This instrumentation should be used before optimizing the encoded path. It helps evaluate future changes such as GPU-side encoding, reusing encoded arrays across multiple kernels, storing encoded datasets on disk, adding 2-bit packing, batching with CUDA streams, and eventually feeding encoded data into Smith-Waterman.
 
 ## Current Limitations
 

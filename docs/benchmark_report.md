@@ -21,6 +21,34 @@ GPU kernel time is measured with CUDA events around only the CUDA kernel launch.
 
 GPU total time is the average elapsed host-side time for a measured GPU run that includes host-to-device copies, kernel execution, and device-to-host copies. This value is usually more representative of end-to-end accelerator cost for the current implementation.
 
+For the encoded GPU implementation, Phase 7 now reports a more detailed timing breakdown:
+
+```text
+FILE_READ_TIME_MS
+INPUT_VALIDATION_TIME_MS
+ENCODING_TIME_MS
+HOST_ALLOCATION_TIME_MS
+DEVICE_ALLOCATION_TIME_MS
+H2D_COPY_TIME_MS
+GPU_KERNEL_TIME_MS
+D2H_COPY_TIME_MS
+CPU_REFERENCE_TIME_MS
+VALIDATION_TIME_MS
+CSV_WRITE_TIME_MS
+GPU_TOTAL_TIME_MS
+END_TO_END_TIME_MS
+```
+
+For encoded runs, `GPU_TOTAL_TIME_MS` is defined as:
+
+```text
+DEVICE_ALLOCATION_TIME_MS + H2D_COPY_TIME_MS + GPU_KERNEL_TIME_MS + D2H_COPY_TIME_MS
+```
+
+`END_TO_END_TIME_MS` is the full executable pipeline time. It includes file reading, input validation, CPU-side encoding, host allocation, device allocation, memory copies, kernel execution, CPU reference computation, validation, and CSV writing.
+
+This distinction matters because encoded kernel time can be good while encoded end-to-end time is poor. CPU-side encoding, correctness validation, and CSV writing are useful and necessary for the benchmark, but they should not be confused with CUDA kernel performance.
+
 ## Small and Large Workloads
 
 Small workloads may be faster on CPU because GPU execution has fixed overheads: memory allocation, data transfers, kernel launch latency, synchronization, and CUDA runtime setup. When the number of sequence pairs is small, there may not be enough parallel work to amortize those costs.
@@ -57,6 +85,14 @@ The benchmark CSV includes:
 - `gpu_total_bases_per_second`: GPU end-to-end base comparison throughput
 
 Division by zero is handled safely by reporting `0.0` for the affected derived metric.
+
+For real dataset encoded benchmarks, the CSV also distinguishes:
+
+- `encoded_kernel_speedup`: `cpu_time_ms / encoded_gpu_kernel_time_ms`
+- `encoded_total_speedup`: `cpu_time_ms / encoded_gpu_total_time_ms`
+- `encoded_end_to_end_speedup`: `cpu_time_ms / encoded_end_to_end_time_ms`
+
+`encoded_total_speedup` compares CPU time against the encoded GPU device pipeline. `encoded_end_to_end_speedup` compares CPU time against the full encoded executable pipeline, including preprocessing and validation.
 
 ## Correctness Validation
 
@@ -112,3 +148,25 @@ kernel_speedup_by_workload.png
 total_speedup_by_workload.png
 bases_per_second.png
 ```
+
+Encoded timing breakdown charts for Phase 7 real dataset pairing modes are generated with:
+
+```bash
+python scripts/plot_encoded_timing_breakdown.py
+```
+
+Charts are saved to:
+
+```text
+assets/benchmark_charts/encoded_timing_breakdown/
+```
+
+Generated charts:
+
+```text
+encoded_timing_breakdown_by_mode.png
+encoded_gpu_pipeline_breakdown_by_mode.png
+encoded_overhead_vs_kernel_by_mode.png
+```
+
+These charts make it easier to decide whether future work should focus on GPU-side encoding, encoded data reuse, encoded on-disk datasets, 2-bit packing, CUDA streams, or later alignment algorithms such as Smith-Waterman.

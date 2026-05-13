@@ -23,11 +23,23 @@ CSV_FIELDNAMES = [
     "total_bases_compared",
     "char_gpu_kernel_time_ms",
     "char_gpu_total_time_ms",
+    "encoded_file_read_time_ms",
+    "encoded_input_validation_time_ms",
+    "encoded_encoding_time_ms",
+    "encoded_host_allocation_time_ms",
+    "encoded_device_allocation_time_ms",
+    "encoded_h2d_copy_time_ms",
     "encoded_gpu_kernel_time_ms",
+    "encoded_d2h_copy_time_ms",
+    "encoded_cpu_reference_time_ms",
+    "encoded_validation_time_ms",
+    "encoded_csv_write_time_ms",
     "encoded_gpu_total_time_ms",
+    "encoded_end_to_end_time_ms",
     "encoding_time_ms",
     "kernel_speedup_encoded_vs_char",
     "total_speedup_encoded_vs_char",
+    "end_to_end_speedup_encoded_vs_char",
     "encoded_passed",
     "char_passed",
 ]
@@ -164,8 +176,19 @@ def build_benchmark_row(
     sequence_length: int,
     char_gpu_kernel_time_ms: float,
     char_gpu_total_time_ms: float,
+    encoded_file_read_time_ms: float,
+    encoded_input_validation_time_ms: float,
+    encoded_encoding_time_ms: float,
+    encoded_host_allocation_time_ms: float,
+    encoded_device_allocation_time_ms: float,
+    encoded_h2d_copy_time_ms: float,
     encoded_gpu_kernel_time_ms: float,
+    encoded_d2h_copy_time_ms: float,
+    encoded_cpu_reference_time_ms: float,
+    encoded_validation_time_ms: float,
+    encoded_csv_write_time_ms: float,
     encoded_gpu_total_time_ms: float,
+    encoded_end_to_end_time_ms: float,
     encoding_time_ms: float,
     char_passed: bool,
     encoded_passed: bool,
@@ -178,11 +201,23 @@ def build_benchmark_row(
         "total_bases_compared": total_bases_compared,
         "char_gpu_kernel_time_ms": char_gpu_kernel_time_ms,
         "char_gpu_total_time_ms": char_gpu_total_time_ms,
+        "encoded_file_read_time_ms": encoded_file_read_time_ms,
+        "encoded_input_validation_time_ms": encoded_input_validation_time_ms,
+        "encoded_encoding_time_ms": encoded_encoding_time_ms,
+        "encoded_host_allocation_time_ms": encoded_host_allocation_time_ms,
+        "encoded_device_allocation_time_ms": encoded_device_allocation_time_ms,
+        "encoded_h2d_copy_time_ms": encoded_h2d_copy_time_ms,
         "encoded_gpu_kernel_time_ms": encoded_gpu_kernel_time_ms,
+        "encoded_d2h_copy_time_ms": encoded_d2h_copy_time_ms,
+        "encoded_cpu_reference_time_ms": encoded_cpu_reference_time_ms,
+        "encoded_validation_time_ms": encoded_validation_time_ms,
+        "encoded_csv_write_time_ms": encoded_csv_write_time_ms,
         "encoded_gpu_total_time_ms": encoded_gpu_total_time_ms,
+        "encoded_end_to_end_time_ms": encoded_end_to_end_time_ms,
         "encoding_time_ms": encoding_time_ms,
         "kernel_speedup_encoded_vs_char": safe_divide(char_gpu_kernel_time_ms, encoded_gpu_kernel_time_ms),
         "total_speedup_encoded_vs_char": safe_divide(char_gpu_total_time_ms, encoded_gpu_total_time_ms),
+        "end_to_end_speedup_encoded_vs_char": safe_divide(char_gpu_total_time_ms, encoded_end_to_end_time_ms),
         "encoded_passed": str(encoded_passed).lower(),
         "char_passed": str(char_passed).lower(),
     }
@@ -257,9 +292,20 @@ def main() -> None:
                 check=False,
             )
             encoded_values = parse_key_value_output(encoded_run.stdout)
+            encoded_file_read_time_ms = parse_float(encoded_values, "FILE_READ_TIME_MS")
+            encoded_input_validation_time_ms = parse_float(encoded_values, "INPUT_VALIDATION_TIME_MS")
+            encoded_encoding_time_ms = parse_float(encoded_values, "ENCODING_TIME_MS")
+            encoded_host_allocation_time_ms = parse_float(encoded_values, "HOST_ALLOCATION_TIME_MS")
+            encoded_device_allocation_time_ms = parse_float(encoded_values, "DEVICE_ALLOCATION_TIME_MS")
+            encoded_h2d_copy_time_ms = parse_float(encoded_values, "H2D_COPY_TIME_MS")
             encoded_gpu_kernel_time_ms = parse_float(encoded_values, "GPU_KERNEL_TIME_MS")
+            encoded_d2h_copy_time_ms = parse_float(encoded_values, "D2H_COPY_TIME_MS")
+            encoded_cpu_reference_time_ms = parse_float(encoded_values, "CPU_REFERENCE_TIME_MS")
+            encoded_validation_time_ms = parse_float(encoded_values, "VALIDATION_TIME_MS")
+            encoded_csv_write_time_ms = parse_float(encoded_values, "CSV_WRITE_TIME_MS")
             encoded_gpu_total_time_ms = parse_float(encoded_values, "GPU_TOTAL_TIME_MS")
-            encoding_time_ms = parse_float(encoded_values, "ENCODING_TIME_MS")
+            encoded_end_to_end_time_ms = parse_float(encoded_values, "END_TO_END_TIME_MS")
+            encoding_time_ms = encoded_encoding_time_ms
             encoded_validation_status = encoded_values.get("VALIDATION_STATUS", "UNKNOWN")
 
             output_files_match = validate_result_files(char_output_path, encoded_output_path)
@@ -284,8 +330,19 @@ def main() -> None:
                             sequence_length=sequence_length,
                             char_gpu_kernel_time_ms=char_gpu_kernel_time_ms,
                             char_gpu_total_time_ms=char_gpu_total_time_ms,
+                            encoded_file_read_time_ms=encoded_file_read_time_ms,
+                            encoded_input_validation_time_ms=encoded_input_validation_time_ms,
+                            encoded_encoding_time_ms=encoded_encoding_time_ms,
+                            encoded_host_allocation_time_ms=encoded_host_allocation_time_ms,
+                            encoded_device_allocation_time_ms=encoded_device_allocation_time_ms,
+                            encoded_h2d_copy_time_ms=encoded_h2d_copy_time_ms,
                             encoded_gpu_kernel_time_ms=encoded_gpu_kernel_time_ms,
+                            encoded_d2h_copy_time_ms=encoded_d2h_copy_time_ms,
+                            encoded_cpu_reference_time_ms=encoded_cpu_reference_time_ms,
+                            encoded_validation_time_ms=encoded_validation_time_ms,
+                            encoded_csv_write_time_ms=encoded_csv_write_time_ms,
                             encoded_gpu_total_time_ms=encoded_gpu_total_time_ms,
+                            encoded_end_to_end_time_ms=encoded_end_to_end_time_ms,
                             encoding_time_ms=encoding_time_ms,
                             char_passed=char_passed,
                             encoded_passed=encoded_passed,
@@ -299,8 +356,19 @@ def main() -> None:
                     sequence_length=sequence_length,
                     char_gpu_kernel_time_ms=char_gpu_kernel_time_ms,
                     char_gpu_total_time_ms=char_gpu_total_time_ms,
+                    encoded_file_read_time_ms=encoded_file_read_time_ms,
+                    encoded_input_validation_time_ms=encoded_input_validation_time_ms,
+                    encoded_encoding_time_ms=encoded_encoding_time_ms,
+                    encoded_host_allocation_time_ms=encoded_host_allocation_time_ms,
+                    encoded_device_allocation_time_ms=encoded_device_allocation_time_ms,
+                    encoded_h2d_copy_time_ms=encoded_h2d_copy_time_ms,
                     encoded_gpu_kernel_time_ms=encoded_gpu_kernel_time_ms,
+                    encoded_d2h_copy_time_ms=encoded_d2h_copy_time_ms,
+                    encoded_cpu_reference_time_ms=encoded_cpu_reference_time_ms,
+                    encoded_validation_time_ms=encoded_validation_time_ms,
+                    encoded_csv_write_time_ms=encoded_csv_write_time_ms,
                     encoded_gpu_total_time_ms=encoded_gpu_total_time_ms,
+                    encoded_end_to_end_time_ms=encoded_end_to_end_time_ms,
                     encoding_time_ms=encoding_time_ms,
                     char_passed=char_passed,
                     encoded_passed=encoded_passed,

@@ -695,6 +695,7 @@ Current Phase 7 status:
 * CPU, char-based GPU, and encoded GPU Hamming implementations can be benchmarked on real genomic pairs.
 * Benchmark results are saved to `benchmarks/real_dataset_hamming_benchmark_results.csv`.
 * Real dataset charts are saved to `assets/benchmark_charts/real_dataset/`.
+* Encoded GPU timing breakdown charts are saved to `assets/benchmark_charts/encoded_timing_breakdown/`.
 * Phase 7 still uses Hamming Distance and does not implement Needleman-Wunsch, Smith-Waterman, or 2-bit packing.
 
 Phase 7 pair generation modes:
@@ -703,6 +704,13 @@ Phase 7 pair generation modes:
 * `all_vs_all`: compares every fragment against every other fragment while excluding self-pairs. This creates a much larger workload and can be capped with `--max-pairs`.
 * `sampled`: samples a fixed number of target fragments per source fragment. This is the recommended default for meaningful GPU benchmarking.
 * `mutated_queries`: creates mutated copies of real fragments using `--mutation-rate`, which is useful for controlled correctness and similarity experiments.
+
+Phase 7 encoded timing instrumentation:
+
+* `hamming_gpu_encoded` now reports file read, input validation, encoding, host allocation, device allocation, H2D copy, kernel, D2H copy, CPU reference, validation, CSV write, GPU total, and end-to-end timings.
+* `GPU_TOTAL_TIME_MS` is the encoded GPU device pipeline: device allocation + H2D copy + kernel + D2H copy.
+* `END_TO_END_TIME_MS` is the full executable pipeline, including preprocessing and correctness/reporting work.
+* This breakdown explains whether poor encoded total runtime comes from encoding, transfers, validation, CSV writing, or kernel execution before optimization work begins.
 
 Phase 7 Colab commands:
 
@@ -802,6 +810,8 @@ Phase 7 Colab commands:
 !python scripts/plot_real_dataset_benchmark.py
 
 !python scripts/plot_real_dataset_pairing_modes.py
+
+!python scripts/plot_encoded_timing_breakdown.py
 ```
 
 ---

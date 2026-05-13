@@ -51,6 +51,22 @@ struct ValidationResult {
     int gpu_distance = 0;
 };
 
+struct TimingBreakdown {
+    double file_read_time_ms = 0.0;
+    double input_validation_time_ms = 0.0;
+    double encoding_time_ms = 0.0;
+    double host_allocation_time_ms = 0.0;
+    double device_allocation_time_ms = 0.0;
+    double h2d_copy_time_ms = 0.0;
+    double kernel_time_ms = 0.0;
+    double d2h_copy_time_ms = 0.0;
+    double cpu_reference_time_ms = 0.0;
+    double validation_time_ms = 0.0;
+    double csv_write_time_ms = 0.0;
+    double gpu_total_time_ms = 0.0;
+    double end_to_end_time_ms = 0.0;
+};
+
 int parse_repetitions(int argc, char** argv) {
     constexpr int default_repetitions = 5;
     if (argc == 3) {
@@ -83,9 +99,6 @@ Dataset read_dataset(const std::string& input_path) {
         if (first_sequence.size() != second_sequence.size()) {
             throw std::runtime_error("Found a sequence pair with unequal lengths.");
         }
-        if (!dna::validateDnaSequence(first_sequence) || !dna::validateDnaSequence(second_sequence)) {
-            throw std::runtime_error("Found an invalid DNA sequence. Allowed bases are A, C, G, and T.");
-        }
         if (!has_sequence_length) {
             if (first_sequence.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
                 throw std::runtime_error("Sequence length exceeds supported integer range.");
@@ -116,6 +129,30 @@ Dataset read_dataset(const std::string& input_path) {
 
     dataset.number_of_pairs = static_cast<int>(number_of_pairs);
     return dataset;
+}
+
+void validate_dataset(const Dataset& dataset) {
+    if (dataset.number_of_pairs <= 0 || dataset.sequence_length <= 0) {
+        throw std::runtime_error("Input dataset is empty.");
+    }
+
+    const std::size_t expected_base_count = static_cast<std::size_t>(dataset.number_of_pairs) *
+                                            static_cast<std::size_t>(dataset.sequence_length);
+    if (dataset.first_sequences_char.size() != expected_base_count ||
+        dataset.second_sequences_char.size() != expected_base_count) {
+        throw std::runtime_error("Input dataset has inconsistent sequence storage.");
+    }
+
+    for (char base : dataset.first_sequences_char) {
+        if (!dna::isValidDnaBase(base)) {
+            throw std::runtime_error("Found an invalid DNA sequence. Allowed bases are A, C, G, and T.");
+        }
+    }
+    for (char base : dataset.second_sequences_char) {
+        if (!dna::isValidDnaBase(base)) {
+            throw std::runtime_error("Found an invalid DNA sequence. Allowed bases are A, C, G, and T.");
+        }
+    }
 }
 
 std::vector<int> compute_cpu_distances(const std::vector<std::uint8_t>& sequence_a,
@@ -191,31 +228,50 @@ int main(int argc, char** argv) {
     cudaEvent_t kernel_stop_event = nullptr;
 
     try {
+        CpuTimer end_to_end_timer;
+        TimingBreakdown timings;
+
         const int repetitions = parse_repetitions(argc, argv);
         const std::string input_path = argv[1];
         const std::string output_path = argv[2];
+
+        CpuTimer file_read_timer;
         const Dataset dataset = read_dataset(input_path);
+        timings.file_read_time_ms = file_read_timer.elapsed_milliseconds();
+
+        CpuTimer input_validation_timer;
+        validate_dataset(dataset);
+        timings.input_validation_time_ms = input_validation_timer.elapsed_milliseconds();
 
         CpuTimer encoding_timer;
         const std::vector<std::uint8_t> encoded_sequence_a =
             dna::encodeFlatDnaSequences(dataset.first_sequences_char);
         const std::vector<std::uint8_t> encoded_sequence_b =
             dna::encodeFlatDnaSequences(dataset.second_sequences_char);
-        const double encoding_time_ms = encoding_timer.elapsed_milliseconds();
+        timings.encoding_time_ms = encoding_timer.elapsed_milliseconds();
 
+        CpuTimer cpu_reference_timer;
         const std::vector<int> cpu_distances = compute_cpu_distances(
             encoded_sequence_a,
             encoded_sequence_b,
             dataset.number_of_pairs,
             dataset.sequence_length);
+        timings.cpu_reference_time_ms = cpu_reference_timer.elapsed_milliseconds();
+
+        CpuTimer host_allocation_timer;
         std::vector<int> gpu_distances(static_cast<std::size_t>(dataset.number_of_pairs));
+        timings.host_allocation_time_ms = host_allocation_timer.elapsed_milliseconds();
 
         const std::size_t sequence_bytes = encoded_sequence_a.size() * sizeof(std::uint8_t);
         const std::size_t distance_bytes = gpu_distances.size() * sizeof(int);
 
+        CpuTimer device_allocation_timer;
         CUDA_CHECK(cudaMalloc(&device_sequence_a, sequence_bytes));
         CUDA_CHECK(cudaMalloc(&device_sequence_b, sequence_bytes));
         CUDA_CHECK(cudaMalloc(&device_distances, distance_bytes));
+        CUDA_CHECK(cudaDeviceSynchronize());
+        timings.device_allocation_time_ms = device_allocation_timer.elapsed_milliseconds();
+
         CUDA_CHECK(cudaEventCreate(&kernel_start_event));
         CUDA_CHECK(cudaEventCreate(&kernel_stop_event));
 
@@ -235,14 +291,18 @@ int main(int argc, char** argv) {
         CUDA_CHECK(cudaDeviceSynchronize());
 
         double total_kernel_time_ms = 0.0;
-        double total_transfer_compute_time_ms = 0.0;
+        double total_h2d_copy_time_ms = 0.0;
+        double total_d2h_copy_time_ms = 0.0;
         float minimum_kernel_time_ms = std::numeric_limits<float>::max();
-        double minimum_transfer_compute_time_ms = std::numeric_limits<double>::max();
+        double minimum_h2d_copy_time_ms = std::numeric_limits<double>::max();
+        double minimum_d2h_copy_time_ms = std::numeric_limits<double>::max();
 
         for (int repetition = 0; repetition < repetitions; ++repetition) {
-            CpuTimer total_timer;
+            CpuTimer h2d_copy_timer;
             CUDA_CHECK(cudaMemcpy(device_sequence_a, encoded_sequence_a.data(), sequence_bytes, cudaMemcpyHostToDevice));
             CUDA_CHECK(cudaMemcpy(device_sequence_b, encoded_sequence_b.data(), sequence_bytes, cudaMemcpyHostToDevice));
+            CUDA_CHECK(cudaDeviceSynchronize());
+            const double repetition_h2d_copy_time_ms = h2d_copy_timer.elapsed_milliseconds();
 
             CUDA_CHECK(cudaEventRecord(kernel_start_event));
             hammingEncodedKernel<<<blocks_per_grid, threads_per_block>>>(
@@ -258,26 +318,40 @@ int main(int argc, char** argv) {
             float repetition_kernel_time_ms = 0.0f;
             CUDA_CHECK(cudaEventElapsedTime(&repetition_kernel_time_ms, kernel_start_event, kernel_stop_event));
 
+            CpuTimer d2h_copy_timer;
             CUDA_CHECK(cudaMemcpy(gpu_distances.data(), device_distances, distance_bytes, cudaMemcpyDeviceToHost));
-            const double repetition_transfer_compute_time_ms = total_timer.elapsed_milliseconds();
+            CUDA_CHECK(cudaDeviceSynchronize());
+            const double repetition_d2h_copy_time_ms = d2h_copy_timer.elapsed_milliseconds();
 
             total_kernel_time_ms += static_cast<double>(repetition_kernel_time_ms);
-            total_transfer_compute_time_ms += repetition_transfer_compute_time_ms;
+            total_h2d_copy_time_ms += repetition_h2d_copy_time_ms;
+            total_d2h_copy_time_ms += repetition_d2h_copy_time_ms;
             if (repetition_kernel_time_ms < minimum_kernel_time_ms) {
                 minimum_kernel_time_ms = repetition_kernel_time_ms;
             }
-            if (repetition_transfer_compute_time_ms < minimum_transfer_compute_time_ms) {
-                minimum_transfer_compute_time_ms = repetition_transfer_compute_time_ms;
+            if (repetition_h2d_copy_time_ms < minimum_h2d_copy_time_ms) {
+                minimum_h2d_copy_time_ms = repetition_h2d_copy_time_ms;
+            }
+            if (repetition_d2h_copy_time_ms < minimum_d2h_copy_time_ms) {
+                minimum_d2h_copy_time_ms = repetition_d2h_copy_time_ms;
             }
         }
 
-        const double average_kernel_time_ms = total_kernel_time_ms / static_cast<double>(repetitions);
-        const double average_transfer_compute_time_ms =
-            total_transfer_compute_time_ms / static_cast<double>(repetitions);
-        const double average_gpu_total_time_ms = encoding_time_ms + average_transfer_compute_time_ms;
-        const double minimum_gpu_total_time_ms = encoding_time_ms + minimum_transfer_compute_time_ms;
+        timings.kernel_time_ms = total_kernel_time_ms / static_cast<double>(repetitions);
+        timings.h2d_copy_time_ms = total_h2d_copy_time_ms / static_cast<double>(repetitions);
+        timings.d2h_copy_time_ms = total_d2h_copy_time_ms / static_cast<double>(repetitions);
+        timings.gpu_total_time_ms = timings.device_allocation_time_ms +
+                                    timings.h2d_copy_time_ms +
+                                    timings.kernel_time_ms +
+                                    timings.d2h_copy_time_ms;
+        const double minimum_gpu_total_time_ms = timings.device_allocation_time_ms +
+                                                 minimum_h2d_copy_time_ms +
+                                                 static_cast<double>(minimum_kernel_time_ms) +
+                                                 minimum_d2h_copy_time_ms;
 
+        CpuTimer validation_timer;
         const ValidationResult validation = validate_results(gpu_distances, cpu_distances);
+        timings.validation_time_ms = validation_timer.elapsed_milliseconds();
         if (!validation.passed) {
             std::cerr << "Error: Encoded GPU validation failed against CPU reference results.\n";
             std::cerr << "First mismatching pair ID: " << validation.first_mismatch_pair_id << "\n";
@@ -285,16 +359,19 @@ int main(int argc, char** argv) {
             std::cerr << "GPU distance: " << validation.gpu_distance << "\n";
         }
 
+        CpuTimer csv_write_timer;
         write_results_csv(output_path, gpu_distances, dataset.sequence_length);
+        timings.csv_write_time_ms = csv_write_timer.elapsed_milliseconds();
+        timings.end_to_end_time_ms = end_to_end_timer.elapsed_milliseconds();
 
         std::cout << "Number of pairs: " << dataset.number_of_pairs << "\n";
         std::cout << "Sequence length: " << dataset.sequence_length << "\n";
-        std::cout << "Encoding time: " << std::fixed << std::setprecision(3) << encoding_time_ms << " ms\n";
-        std::cout << "GPU average kernel time: " << std::fixed << std::setprecision(3) << average_kernel_time_ms
+        std::cout << "Encoding time: " << std::fixed << std::setprecision(3) << timings.encoding_time_ms << " ms\n";
+        std::cout << "GPU average kernel time: " << std::fixed << std::setprecision(3) << timings.kernel_time_ms
                   << " ms\n";
         std::cout << "GPU minimum kernel time: " << std::fixed << std::setprecision(3) << minimum_kernel_time_ms
                   << " ms\n";
-        std::cout << "GPU average total time: " << std::fixed << std::setprecision(3) << average_gpu_total_time_ms
+        std::cout << "GPU average total time: " << std::fixed << std::setprecision(3) << timings.gpu_total_time_ms
                   << " ms\n";
         std::cout << "GPU minimum total time: " << std::fixed << std::setprecision(3) << minimum_gpu_total_time_ms
                   << " ms\n";
@@ -302,14 +379,29 @@ int main(int argc, char** argv) {
         std::cout << "Validation status: " << (validation.passed ? "PASSED" : "FAILED") << "\n";
         std::cout << "Output path: " << output_path << "\n";
         std::cout << std::fixed << std::setprecision(6);
-        std::cout << "ENCODING_TIME_MS=" << encoding_time_ms << "\n";
-        std::cout << "GPU_KERNEL_TIME_MS=" << average_kernel_time_ms << "\n";
+        std::cout << "FILE_READ_TIME_MS=" << timings.file_read_time_ms << "\n";
+        std::cout << "INPUT_VALIDATION_TIME_MS=" << timings.input_validation_time_ms << "\n";
+        std::cout << "ENCODING_TIME_MS=" << timings.encoding_time_ms << "\n";
+        std::cout << "HOST_ALLOCATION_TIME_MS=" << timings.host_allocation_time_ms << "\n";
+        std::cout << "DEVICE_ALLOCATION_TIME_MS=" << timings.device_allocation_time_ms << "\n";
+        std::cout << "H2D_COPY_TIME_MS=" << timings.h2d_copy_time_ms << "\n";
+        std::cout << "GPU_KERNEL_TIME_MS=" << timings.kernel_time_ms << "\n";
         std::cout << "GPU_KERNEL_MIN_TIME_MS=" << minimum_kernel_time_ms << "\n";
-        std::cout << "GPU_TRANSFER_COMPUTE_TIME_MS=" << average_transfer_compute_time_ms << "\n";
-        std::cout << "GPU_TOTAL_TIME_MS=" << average_gpu_total_time_ms << "\n";
+        std::cout << "D2H_COPY_TIME_MS=" << timings.d2h_copy_time_ms << "\n";
+        std::cout << "CPU_REFERENCE_TIME_MS=" << timings.cpu_reference_time_ms << "\n";
+        std::cout << "VALIDATION_TIME_MS=" << timings.validation_time_ms << "\n";
+        std::cout << "CSV_WRITE_TIME_MS=" << timings.csv_write_time_ms << "\n";
+        std::cout << "GPU_TRANSFER_COMPUTE_TIME_MS="
+                  << (timings.h2d_copy_time_ms + timings.kernel_time_ms + timings.d2h_copy_time_ms) << "\n";
+        std::cout << "GPU_TOTAL_TIME_MS=" << timings.gpu_total_time_ms << "\n";
         std::cout << "GPU_TOTAL_MIN_TIME_MS=" << minimum_gpu_total_time_ms << "\n";
+        std::cout << "END_TO_END_TIME_MS=" << timings.end_to_end_time_ms << "\n";
         std::cout << "NUMBER_OF_PAIRS=" << dataset.number_of_pairs << "\n";
         std::cout << "SEQUENCE_LENGTH=" << dataset.sequence_length << "\n";
+        std::cout << "TOTAL_BASES_COMPARED="
+                  << static_cast<std::size_t>(dataset.number_of_pairs) *
+                         static_cast<std::size_t>(dataset.sequence_length)
+                  << "\n";
         std::cout << "REPETITIONS=" << repetitions << "\n";
         std::cout << "VALIDATION_STATUS=" << (validation.passed ? "PASSED" : "FAILED") << "\n";
         if (!validation.passed) {
