@@ -729,6 +729,15 @@ Phase 7 indexed CUDA Graphs pipeline:
 * It falls back to the normal stream and `cudaMalloc` path when those features are unavailable.
 * Detailed notes are in `docs/indexed_graphs_optimization.md`.
 
+Phase 7 final summary:
+
+* Phase 7 demonstrates that index-based representation, CUDA Graphs, and `cudaMallocAsync` reduce GPU pipeline overhead, especially for high-reuse workloads such as `all_vs_all`.
+* Generate the final summary CSVs with `python scripts/summarize_phase7_results.py`.
+* Generate the final summary charts with `python scripts/plot_phase7_final_summary.py`.
+* Final report: `docs/phase7_final_report.md`.
+* Final summary CSVs: `benchmarks/phase7_final_summary.csv` and `benchmarks/phase7_key_findings.csv`.
+* Final charts: `assets/benchmark_charts/phase7_final_summary/`.
+
 Phase 7 Colab commands:
 
 ```bash
@@ -853,6 +862,10 @@ Phase 7 Colab commands:
 !python benchmarks/run_indexed_graphs_benchmark.py
 
 !python scripts/plot_indexed_graphs_benchmark.py
+
+!python scripts/summarize_phase7_results.py
+
+!python scripts/plot_phase7_final_summary.py
 ```
 
 ---

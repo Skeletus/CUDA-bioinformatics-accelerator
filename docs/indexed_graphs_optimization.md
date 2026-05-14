@@ -178,3 +178,23 @@ This phase still uses `uint8_t` per base. It does not implement 2-bit packing, N
 ## Future Work
 
 Future work includes GPU-side encoding, 2-bit packing, CUDA streams for batched execution, larger genomes such as E. coli, Smith-Waterman, and index-based dynamic programming kernels.
+
+## Phase 7 Final Summary
+
+The final Phase 7 consolidation scripts are:
+
+```bash
+python scripts/summarize_phase7_results.py
+python scripts/plot_phase7_final_summary.py
+```
+
+They generate:
+
+```text
+benchmarks/phase7_final_summary.csv
+benchmarks/phase7_key_findings.csv
+assets/benchmark_charts/phase7_final_summary/
+docs/phase7_final_report.md
+```
+
+The final report explains why `all_vs_all` is the strongest scalability stress mode, why `sampled` is the recommended default benchmark mode, and why CPU-side preprocessing is the next bottleneck after GPU pipeline optimization.

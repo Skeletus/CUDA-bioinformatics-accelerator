@@ -232,3 +232,23 @@ assets/benchmark_charts/indexed_graphs/
 ```
 
 The benchmark reports transfer reduction, graph support, `cudaMallocAsync` support, setup time, GPU pipeline time, end-to-end time, and validation status. CUDA Graphs reduce repeated H2D/kernel/D2H orchestration overhead, while the indexed representation reduces transferred input bytes.
+
+## Phase 7 Final Summary Artifacts
+
+Generate the final Phase 7 summary with:
+
+```bash
+python scripts/summarize_phase7_results.py
+python scripts/plot_phase7_final_summary.py
+```
+
+Outputs:
+
+```text
+benchmarks/phase7_final_summary.csv
+benchmarks/phase7_key_findings.csv
+assets/benchmark_charts/phase7_final_summary/
+docs/phase7_final_report.md
+```
+
+The final summary highlights pipeline speedup, end-to-end speedup, transfer reduction ratio, validation status, best scalability mode, recommended default benchmark mode, and the next bottleneck.
