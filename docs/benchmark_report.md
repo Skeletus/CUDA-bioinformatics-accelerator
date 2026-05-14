@@ -208,3 +208,27 @@ The optimized benchmark separates:
 - cache hit rate
 
 This benchmark should be used to decide whether the next optimization should target transfer volume, encoded data reuse, output cost, or a future index-based GPU representation.
+
+## Indexed CUDA Graphs Benchmark
+
+The indexed CUDA Graphs benchmark compares the optimized flat encoded implementation against:
+
+```text
+hamming_gpu_encoded_indexed_graphs
+```
+
+Run:
+
+```bash
+python benchmarks/run_indexed_graphs_benchmark.py
+python scripts/plot_indexed_graphs_benchmark.py
+```
+
+Results are saved to:
+
+```text
+benchmarks/indexed_graphs_benchmark_results.csv
+assets/benchmark_charts/indexed_graphs/
+```
+
+The benchmark reports transfer reduction, graph support, `cudaMallocAsync` support, setup time, GPU pipeline time, end-to-end time, and validation status. CUDA Graphs reduce repeated H2D/kernel/D2H orchestration overhead, while the indexed representation reduces transferred input bytes.

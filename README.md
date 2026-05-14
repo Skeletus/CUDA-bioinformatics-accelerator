@@ -721,6 +721,14 @@ Phase 7 optimized encoded pipeline:
 * It supports `--summary-only` for benchmark runs that should avoid per-pair CSV output overhead.
 * Optimization details are documented in `docs/encoded_pipeline_optimization.md`.
 
+Phase 7 indexed CUDA Graphs pipeline:
+
+* `src/hamming_gpu_encoded_indexed_graphs.cu` stores unique encoded fragments once and transfers pair-index arrays instead of duplicated flat pair buffers.
+* It uses CUDA Graphs when supported to reduce repeated H2D/kernel/D2H launch orchestration.
+* It uses `cudaMallocAsync` when supported to allocate device buffers through the CUDA memory pool.
+* It falls back to the normal stream and `cudaMalloc` path when those features are unavailable.
+* Detailed notes are in `docs/indexed_graphs_optimization.md`.
+
 Phase 7 Colab commands:
 
 ```bash
@@ -833,6 +841,18 @@ Phase 7 Colab commands:
 !python benchmarks/run_encoded_optimized_benchmark.py
 
 !python scripts/plot_encoded_optimized_benchmark.py
+
+!nvcc src/hamming_gpu_encoded_indexed_graphs.cu -O3 -std=c++17 -I src/common -o hamming_gpu_encoded_indexed_graphs
+
+!./hamming_gpu_encoded_indexed_graphs \
+  data/processed/sars_cov_2_pairs_128_stride_32_all_vs_all.txt \
+  results/hamming/hamming_gpu_encoded_indexed_graphs_all_vs_all_results.csv \
+  --repetitions 5 \
+  --summary-only
+
+!python benchmarks/run_indexed_graphs_benchmark.py
+
+!python scripts/plot_indexed_graphs_benchmark.py
 ```
 
 ---

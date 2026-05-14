@@ -209,3 +209,26 @@ The optimized implementation does not implement:
 The highest-value next step is an index-based pair representation. Instead of transferring duplicated flat pair buffers, the GPU would receive unique encoded fragments plus two pair-index arrays. This can reduce H2D copy size for `sampled` and `all_vs_all` modes.
 
 Other future optimizations include GPU-side encoding, storing encoded datasets on disk, 2-bit packing, CUDA streams, batching, `cudaMallocAsync`, persistent kernels, and later Smith-Waterman kernels.
+
+## Indexed CUDA Graphs Extension
+
+The next optimization stage is implemented in:
+
+```text
+src/hamming_gpu_encoded_indexed_graphs.cu
+```
+
+It uses unique encoded fragments plus pair-index arrays to reduce duplicated H2D transfers. It also attempts to use `cudaMallocAsync` and CUDA Graphs when supported by the runtime, with graceful fallback to the normal stream path.
+
+Run:
+
+```bash
+python benchmarks/run_indexed_graphs_benchmark.py
+python scripts/plot_indexed_graphs_benchmark.py
+```
+
+Detailed notes are in:
+
+```text
+docs/indexed_graphs_optimization.md
+```
