@@ -1,0 +1,5 @@
+pair_id,sequence_length_a,sequence_length_b,alignment_score
+0,8,8,4
+1,8,8,4
+2,8,8,4
+3,8,8,-5

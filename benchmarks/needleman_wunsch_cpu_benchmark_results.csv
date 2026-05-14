@@ -1,0 +1,16 @@
+algorithm,num_pairs,sequence_length,total_cells_computed,cpu_time_ms,average_time_per_pair_ms,cells_per_second,match_score,mismatch_penalty,gap_penalty,memory_mode,validation_status
+needleman_wunsch_cpu,10,16,2890,0.0106,0.00106,272641509.4339623,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,100,16,28900,0.1409,0.0014089999999999999,205110007.09723207,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,1000,16,289000,1.395033,0.001395033,207163558.1380512,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,10,32,10890,0.0327,0.00327,333027522.9357798,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,100,32,108900,0.541867,0.0054186699999999996,200971825.18957603,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,1000,32,1089000,6.3596,0.0063596,171237184.72859928,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,10,64,42250,0.226867,0.0226867,186232462.19150427,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,100,64,422500,2.465467,0.02465467,171367128.41826722,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,1000,64,4225000,23.789833,0.023789833000000003,177596875.10206562,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,10,128,166410,0.497567,0.0497567,334447421.15132236,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,100,128,1664100,3.442,0.03442,483468913.4224288,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,1000,128,16641000,39.760533,0.039760533,418530606.71998537,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,10,256,660490,1.2878,0.12878,512882435.16073924,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,100,256,6604900,12.4235,0.12423500000000001,531645671.50963897,2,-1,-2,rolling,PASSED
+needleman_wunsch_cpu,1000,256,66049000,130.441567,0.13044156699999998,506349329.581421,2,-1,-2,rolling,PASSED

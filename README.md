@@ -876,20 +876,25 @@ Goal:
 
 Implement global sequence alignment on CPU.
 
-Tasks:
+Implemented scope:
 
-* Implement Needleman-Wunsch dynamic programming.
-* Support match score, mismatch penalty, and gap penalty.
-* Return alignment score.
-* Validate on small examples.
-* Benchmark CPU performance.
+* Needleman-Wunsch dynamic programming on CPU.
+* Match score, mismatch penalty, and gap penalty CLI parameters.
+* Full matrix and rolling-row memory modes.
+* Alignment score output without traceback reconstruction.
+* Small correctness tests.
+* CPU benchmark script and charts.
 
 Deliverables:
 
 ```text
+src/common/needleman_wunsch.h
 src/needleman_wunsch_cpu.cpp
 tests/test_needleman_wunsch.cpp
+benchmarks/run_needleman_wunsch_cpu_benchmark.py
+scripts/plot_needleman_wunsch_cpu_benchmark.py
 docs/needleman_wunsch.md
+notebooks/05_needleman_wunsch_cpu.ipynb
 ```
 
 Default scoring:
@@ -898,6 +903,41 @@ Default scoring:
 Match: +2
 Mismatch: -1
 Gap: -2
+```
+
+Phase 8 commands:
+
+```bash
+g++ tests/test_needleman_wunsch.cpp \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o test_needleman_wunsch
+
+./test_needleman_wunsch
+
+g++ src/needleman_wunsch_cpu.cpp \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o needleman_wunsch_cpu
+
+./needleman_wunsch_cpu \
+  data/synthetic/synthetic_pairs_128.txt \
+  results/needleman_wunsch/needleman_wunsch_cpu_results.csv \
+  --repetitions 3
+
+python benchmarks/run_needleman_wunsch_cpu_benchmark.py
+
+python scripts/plot_needleman_wunsch_cpu_benchmark.py
+```
+
+Outputs:
+
+```text
+results/needleman_wunsch/
+benchmarks/needleman_wunsch_cpu_benchmark_results.csv
+assets/benchmark_charts/needleman_wunsch_cpu/
 ```
 
 ---
