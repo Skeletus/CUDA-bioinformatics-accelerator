@@ -1,0 +1,11 @@
+pair_id,sequence_length_a,sequence_length_b,max_local_alignment_score
+0,16,16,13
+1,16,16,11
+2,16,16,9
+3,16,16,8
+4,16,16,10
+5,16,16,12
+6,16,16,6
+7,16,16,6
+8,16,16,14
+9,16,16,7

@@ -1,0 +1,16 @@
+algorithm,num_pairs,sequence_length,total_cells_computed,cpu_time_ms,average_time_per_pair_ms,cells_per_second,match_score,mismatch_penalty,gap_penalty,memory_mode,validation_status
+smith_waterman_cpu,10,16,2890,0.011267,0.0011267,256501286.94417328,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,100,16,28900,0.111767,0.00111767,258573639.80423558,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,1000,16,289000,1.3587,0.0013587,212703319.34937808,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,10,32,10890,0.066067,0.0066067,164832669.86543962,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,100,32,108900,0.435333,0.00435333,250153330.89841568,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,1000,32,1089000,3.492633,0.003492633,311799149.8104725,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,10,64,42250,0.234567,0.0234567,180119113.08922398,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,100,64,422500,2.413167,0.02413167,175081127.8291142,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,1000,64,4225000,25.807833,0.025807833,163709986.80904362,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,10,128,166410,0.338733,0.0338733,491271886.70722955,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,100,128,1664100,3.708033,0.03708033,448782413.74874496,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,1000,128,16641000,43.133733,0.043133733,385800134.6649037,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,10,256,660490,1.308267,0.13082670000000002,504858717.6776606,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,100,256,6604900,13.386967,0.13386967,493382855.13066554,2,-1,-2,rolling,PASSED
+smith_waterman_cpu,1000,256,66049000,147.6685,0.1476685,447278871.2555487,2,-1,-2,rolling,PASSED

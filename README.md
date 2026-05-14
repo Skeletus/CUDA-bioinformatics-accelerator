@@ -948,20 +948,27 @@ Goal:
 
 Implement local sequence alignment on CPU.
 
-Tasks:
+Implemented scope:
 
-* Implement Smith-Waterman dynamic programming.
-* Support match score, mismatch penalty, and gap penalty.
-* Return maximum local alignment score.
-* Validate on small examples.
-* Benchmark CPU performance.
+* Smith-Waterman dynamic programming on CPU.
+* Match score, mismatch penalty, and gap penalty CLI parameters.
+* Full matrix and rolling-row memory modes.
+* Maximum local alignment score output without traceback reconstruction.
+* Small correctness tests.
+* CPU benchmark script and charts.
+
+Smith-Waterman differs from Needleman-Wunsch because it performs local alignment. Negative DP values reset to zero, and the final score is the maximum value anywhere in the matrix instead of the final bottom-right cell.
 
 Deliverables:
 
 ```text
+src/common/smith_waterman.h
 src/smith_waterman_cpu.cpp
 tests/test_smith_waterman.cpp
+benchmarks/run_smith_waterman_cpu_benchmark.py
+scripts/plot_smith_waterman_cpu_benchmark.py
 docs/smith_waterman.md
+notebooks/06_smith_waterman_cpu.ipynb
 ```
 
 Default scoring:
@@ -970,6 +977,41 @@ Default scoring:
 Match: +2
 Mismatch: -1
 Gap: -2
+```
+
+Phase 9 commands:
+
+```bash
+g++ tests/test_smith_waterman.cpp \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o test_smith_waterman
+
+./test_smith_waterman
+
+g++ src/smith_waterman_cpu.cpp \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o smith_waterman_cpu
+
+./smith_waterman_cpu \
+  data/synthetic/synthetic_pairs_128.txt \
+  results/smith_waterman/smith_waterman_cpu_results.csv \
+  --repetitions 3
+
+python benchmarks/run_smith_waterman_cpu_benchmark.py
+
+python scripts/plot_smith_waterman_cpu_benchmark.py
+```
+
+Outputs:
+
+```text
+results/smith_waterman/
+benchmarks/smith_waterman_cpu_benchmark_results.csv
+assets/benchmark_charts/smith_waterman_cpu/
 ```
 
 ---
