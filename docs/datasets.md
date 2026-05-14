@@ -258,6 +258,7 @@ Benchmark charts:
 assets/benchmark_charts/real_dataset/
 assets/benchmark_charts/real_dataset_pairing_modes/
 assets/benchmark_charts/encoded_timing_breakdown/
+assets/benchmark_charts/encoded_optimized/
 ```
 
 ## Encoded Timing Breakdown
@@ -300,6 +301,28 @@ assets/benchmark_charts/encoded_timing_breakdown/
 ```
 
 This instrumentation should be used before optimizing the encoded path. It helps evaluate future changes such as GPU-side encoding, reusing encoded arrays across multiple kernels, storing encoded datasets on disk, adding 2-bit packing, batching with CUDA streams, and eventually feeding encoded data into Smith-Waterman.
+
+## Optimized Encoded Benchmark
+
+The optimized encoded pipeline is implemented separately in:
+
+```text
+src/hamming_gpu_encoded_optimized.cu
+```
+
+It keeps pair-file compatibility while using pinned host memory, reusable GPU buffers, encoded unique-sequence caching, and `--summary-only` benchmark mode. Run the comparison benchmark with:
+
+```bash
+python benchmarks/run_encoded_optimized_benchmark.py
+python scripts/plot_encoded_optimized_benchmark.py
+```
+
+Results are saved to:
+
+```text
+benchmarks/encoded_optimized_benchmark_results.csv
+assets/benchmark_charts/encoded_optimized/
+```
 
 ## Current Limitations
 

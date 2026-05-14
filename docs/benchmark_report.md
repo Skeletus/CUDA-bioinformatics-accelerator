@@ -170,3 +170,41 @@ encoded_overhead_vs_kernel_by_mode.png
 ```
 
 These charts make it easier to decide whether future work should focus on GPU-side encoding, encoded data reuse, encoded on-disk datasets, 2-bit packing, CUDA streams, or later alignment algorithms such as Smith-Waterman.
+
+## Optimized Encoded Pipeline Benchmark
+
+Phase 7 adds a separate optimized encoded benchmark:
+
+```bash
+python benchmarks/run_encoded_optimized_benchmark.py
+```
+
+It compares the baseline `hamming_gpu_encoded` executable against `hamming_gpu_encoded_optimized` across the real dataset pairing modes. The optimized executable uses pinned host memory, one-time reusable device allocation, encoded unique-sequence caching, and `--summary-only` output to reduce non-kernel overhead during benchmark runs.
+
+Results are saved to:
+
+```text
+benchmarks/encoded_optimized_benchmark_results.csv
+```
+
+Generated charts:
+
+```bash
+python scripts/plot_encoded_optimized_benchmark.py
+```
+
+```text
+assets/benchmark_charts/encoded_optimized/
+```
+
+The optimized benchmark separates:
+
+- setup time
+- H2D copy time
+- kernel time
+- D2H copy time
+- GPU pipeline time
+- end-to-end time
+- cache hit rate
+
+This benchmark should be used to decide whether the next optimization should target transfer volume, encoded data reuse, output cost, or a future index-based GPU representation.

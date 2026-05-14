@@ -134,6 +134,32 @@ Structural checks needed while loading the pair file, such as equal sequence len
 
 This measurement should guide optimization work before algorithm changes. Useful next steps include moving encoding to the GPU, reusing encoded data across multiple kernels, storing encoded datasets on disk, adding 2-bit packing, batching work with CUDA streams, and later applying the encoded representation to Smith-Waterman or other alignment kernels.
 
+## Optimized Encoded Pipeline
+
+Phase 7 also adds a separate optimized encoded executable:
+
+```text
+src/hamming_gpu_encoded_optimized.cu
+```
+
+It keeps the same pair-based input format, but uses pinned host memory for transfer buffers, allocates reusable device buffers through a simple memory pool, and encodes repeated DNA sequences through a unique-sequence cache. The optimized executable supports `--summary-only` so benchmark runs can avoid per-pair CSV writing overhead while still validating GPU distances against CPU reference results.
+
+Run it with:
+
+```bash
+./hamming_gpu_encoded_optimized \
+  data/processed/sars_cov_2_pairs_128_stride_32_sampled.txt \
+  results/hamming/hamming_gpu_encoded_optimized_sampled_results.csv \
+  --repetitions 5 \
+  --summary-only
+```
+
+Detailed design notes are in:
+
+```text
+docs/encoded_pipeline_optimization.md
+```
+
 ## Benchmark Methodology
 
 The Phase 6 benchmark compares:

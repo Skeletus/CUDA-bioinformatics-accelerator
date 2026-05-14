@@ -712,6 +712,15 @@ Phase 7 encoded timing instrumentation:
 * `END_TO_END_TIME_MS` is the full executable pipeline, including preprocessing and correctness/reporting work.
 * This breakdown explains whether poor encoded total runtime comes from encoding, transfers, validation, CSV writing, or kernel execution before optimization work begins.
 
+Phase 7 optimized encoded pipeline:
+
+* `src/hamming_gpu_encoded_optimized.cu` adds a separate optimized encoded implementation.
+* It uses pinned host memory for encoded transfer buffers and result buffers.
+* It allocates GPU buffers once through a simple reusable memory pool.
+* It caches unique encoded sequences so repeated fragments are encoded once.
+* It supports `--summary-only` for benchmark runs that should avoid per-pair CSV output overhead.
+* Optimization details are documented in `docs/encoded_pipeline_optimization.md`.
+
 Phase 7 Colab commands:
 
 ```bash
@@ -812,6 +821,18 @@ Phase 7 Colab commands:
 !python scripts/plot_real_dataset_pairing_modes.py
 
 !python scripts/plot_encoded_timing_breakdown.py
+
+!nvcc src/hamming_gpu_encoded_optimized.cu -O3 -std=c++17 -I src/common -o hamming_gpu_encoded_optimized
+
+!./hamming_gpu_encoded_optimized \
+  data/processed/sars_cov_2_pairs_128_stride_32_sampled.txt \
+  results/hamming/hamming_gpu_encoded_optimized_sampled_results.csv \
+  --repetitions 5 \
+  --summary-only
+
+!python benchmarks/run_encoded_optimized_benchmark.py
+
+!python scripts/plot_encoded_optimized_benchmark.py
 ```
 
 ---
