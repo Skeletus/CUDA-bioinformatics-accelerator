@@ -249,10 +249,12 @@ Phase 8 is CPU-only. It does not implement:
 
 Future work includes:
 
-* CUDA implementation.
-* Wavefront parallelism.
-* Shared memory tiling.
-* Smith-Waterman local alignment.
+* Phase 10 Needleman-Wunsch CUDA implementation.
+* Wavefront parallelism using anti-diagonal computation.
+* Shared memory tiling for dynamic programming cells.
+* CPU/GPU correctness validation against the Phase 8 CPU baseline.
+* Benchmarking kernel time, total GPU time, and transfer overhead.
+* Smith-Waterman CUDA after Needleman-Wunsch CUDA is validated.
 * Real genomic fragment alignment.
 * Further rolling-row optimization and batching.
 * Traceback reconstruction.

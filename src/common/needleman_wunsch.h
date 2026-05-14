@@ -94,6 +94,15 @@ inline int score(const std::string& first_sequence,
     throw std::invalid_argument("Unsupported memory mode. Use full or rolling.");
 }
 
+inline int computeNeedlemanWunschScore(const std::string& sequenceA,
+                                       const std::string& sequenceB,
+                                       int matchScore,
+                                       int mismatchPenalty,
+                                       int gapPenalty) {
+    const ScoringScheme scoring{matchScore, mismatchPenalty, gapPenalty};
+    return score_rolling_rows(sequenceA, sequenceB, scoring);
+}
+
 }  // namespace needleman_wunsch
 
 #endif  // NEEDLEMAN_WUNSCH_H

@@ -377,6 +377,24 @@ hamming,10000,128,12.4,0.3,1.1,41.3,11.2
 
 The project should be implemented incrementally.
 
+| Phase | Name                                                   | Status    |
+| ----: | ------------------------------------------------------ | --------- |
+|     1 | CUDA Environment and Minimal GPU Validation            | Completed |
+|     2 | Synthetic Dataset Generator                            | Completed |
+|     3 | CPU Hamming Distance Baseline                          | Completed |
+|     4 | GPU Hamming Distance Kernel                            | Completed |
+|     5 | CPU vs GPU Benchmark Suite                             | Completed |
+|     6 | DNA Encoding Optimization                              | Completed |
+|     7 | Real Dataset Integration and GPU Pipeline Optimization | Completed |
+|     8 | Needleman-Wunsch CPU Implementation                    | Completed |
+|     9 | Smith-Waterman CPU Implementation                      | Completed |
+|    10 | Needleman-Wunsch CUDA Implementation                   | Completed |
+|    11 | Smith-Waterman CUDA Prototype                          | Planned   |
+|    12 | Batched Processing and CUDA Streams                    | Planned   |
+|    13 | Final Documentation and Portfolio Polish               | Planned   |
+
+The roadmap is intentionally staged. Hamming Distance provides the introductory fixed-length parallel comparison baseline. Needleman-Wunsch CPU establishes global alignment, and Needleman-Wunsch CUDA introduces dynamic programming on the GPU through wavefront computation. Smith-Waterman CPU then establishes local alignment, and Smith-Waterman CUDA builds on the same dynamic programming ideas while adding local-alignment reset behavior. Batched processing and CUDA streams optimize throughput across many sequence pairs after the individual algorithms are correct.
+
 ---
 
 ### Phase 1: CUDA Environment and Minimal GPU Validation
@@ -1016,11 +1034,103 @@ assets/benchmark_charts/smith_waterman_cpu/
 
 ---
 
-### Phase 10: Smith-Waterman CUDA Prototype
+### Phase 10: Needleman-Wunsch CUDA Implementation
+
+Goal:
+
+Implement a CUDA prototype for global sequence alignment using the Needleman-Wunsch dynamic programming algorithm.
+
+Implemented scope:
+
+* CUDA Needleman-Wunsch score computation for fixed-length sequence pair datasets.
+* Baseline GPU mode and wavefront GPU mode.
+* One CUDA block per sequence pair.
+* Shared-memory DP matrix for sequence lengths up to 64 bases per sequence side.
+* Anti-diagonal wavefront computation with `__syncthreads()` between diagonals.
+* CPU/GPU correctness validation using the Phase 8 CPU Needleman-Wunsch implementation.
+* CUDA event timing for kernel time.
+* H2D copy, kernel, D2H copy, and GPU total timing.
+* CPU vs GPU benchmark script and benchmark charts.
+
+Needleman-Wunsch CUDA comes before Smith-Waterman CUDA because it introduces the global-alignment dynamic programming structure on GPU first. Smith-Waterman CUDA can reuse the same wavefront and synchronization ideas, then add local-alignment reset behavior.
+
+Deliverables:
+
+```text
+src/needleman_wunsch_gpu.cu
+tests/test_needleman_wunsch_gpu.cpp
+benchmarks/run_needleman_wunsch_gpu_benchmark.py
+scripts/plot_needleman_wunsch_gpu_benchmark.py
+docs/needleman_wunsch_cuda.md
+notebooks/07_needleman_wunsch_cuda.ipynb
+```
+
+Default scoring:
+
+```text
+Match: +2
+Mismatch: -1
+Gap: -2
+```
+
+Important CUDA concepts:
+
+* Dynamic programming on GPU.
+* Wavefront parallelism.
+* Anti-diagonal computation.
+* Shared memory tiling.
+* `__syncthreads()`.
+* Batched sequence alignment.
+* CPU/GPU correctness validation.
+* CUDA event timing.
+* Memory bandwidth analysis.
+* Warp divergence considerations.
+
+Phase 10 commands:
+
+```bash
+nvcc src/needleman_wunsch_gpu.cu \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o needleman_wunsch_gpu
+
+g++ src/needleman_wunsch_cpu.cpp \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o needleman_wunsch_cpu
+
+g++ tests/test_needleman_wunsch_gpu.cpp \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o test_needleman_wunsch_gpu
+
+./test_needleman_wunsch_gpu
+
+python benchmarks/run_needleman_wunsch_gpu_benchmark.py
+
+python scripts/plot_needleman_wunsch_gpu_benchmark.py
+```
+
+Outputs:
+
+```text
+results/needleman_wunsch/
+benchmarks/needleman_wunsch_gpu_benchmark_results.csv
+assets/benchmark_charts/needleman_wunsch_gpu/
+```
+
+---
+
+### Phase 11: Smith-Waterman CUDA Prototype
 
 Goal:
 
 Implement a CUDA version of Smith-Waterman.
+
+Smith-Waterman builds on the same dynamic programming and wavefront ideas used in Needleman-Wunsch, but adds local alignment behavior by resetting negative scores to zero and returning the maximum value in the DP matrix.
 
 Tasks:
 
@@ -1035,8 +1145,11 @@ Deliverables:
 
 ```text
 src/smith_waterman_gpu.cu
+tests/test_smith_waterman_gpu.cpp
+benchmarks/run_smith_waterman_gpu_benchmark.py
+scripts/plot_smith_waterman_gpu_benchmark.py
 docs/smith_waterman_cuda.md
-benchmarks/smith_waterman_benchmark.csv
+notebooks/08_smith_waterman_cuda.ipynb
 ```
 
 Important CUDA concepts:
@@ -1051,7 +1164,7 @@ Important CUDA concepts:
 
 ---
 
-### Phase 11: Batched Processing and CUDA Streams
+### Phase 12: Batched Processing and CUDA Streams
 
 Goal:
 
@@ -1064,11 +1177,13 @@ Tasks:
 * Use multiple CUDA streams.
 * Overlap host-to-device copies, kernel execution, and device-to-host copies.
 * Benchmark stream-based pipeline vs non-stream pipeline.
+* Extend batching support across Hamming Distance, Needleman-Wunsch CUDA, and Smith-Waterman CUDA.
 
 Deliverables:
 
 ```text
 src/batched_hamming_streams.cu
+src/batched_needleman_wunsch_streams.cu
 src/batched_smith_waterman_streams.cu
 docs/cuda_streams.md
 ```
@@ -1083,7 +1198,7 @@ Batch N-1: copy results back to CPU
 
 ---
 
-### Phase 12: Final Documentation and Portfolio Polish
+### Phase 13: Final Documentation and Portfolio Polish
 
 Goal:
 
@@ -1099,6 +1214,7 @@ Tasks:
 * Add explanation of kernel design.
 * Add correctness validation report.
 * Add limitations and future work.
+* Show the progression from Hamming Distance to Needleman-Wunsch CPU, Needleman-Wunsch CUDA, Smith-Waterman CPU, and Smith-Waterman CUDA.
 
 Deliverables:
 
@@ -1129,6 +1245,7 @@ cuda-bioinformatics-accelerator/
 │   ├── hamming_gpu_encoded.cu
 │   ├── dna_encoding.cpp
 │   ├── needleman_wunsch_cpu.cpp
+│   ├── needleman_wunsch_gpu.cu
 │   ├── smith_waterman_cpu.cpp
 │   ├── smith_waterman_gpu.cu
 │   └── common/
@@ -1142,7 +1259,9 @@ cuda-bioinformatics-accelerator/
 │   ├── download_datasets.py
 │   ├── fragment_fasta.py
 │   ├── run_hamming_benchmarks.py
-│   └── plot_benchmarks.py
+│   ├── plot_benchmarks.py
+│   ├── plot_needleman_wunsch_gpu_benchmark.py
+│   └── plot_smith_waterman_gpu_benchmark.py
 │
 ├── data/
 │   ├── synthetic/
@@ -1156,13 +1275,19 @@ cuda-bioinformatics-accelerator/
 │
 ├── benchmarks/
 │   ├── hamming_benchmark_results.csv
+│   ├── needleman_wunsch_cpu_benchmark_results.csv
+│   ├── needleman_wunsch_gpu_benchmark_results.csv
 │   ├── smith_waterman_benchmark_results.csv
 │   └── benchmark_summary.md
 │
 ├── notebooks/
 │   ├── 01_cuda_environment_setup.ipynb
 │   ├── 02_hamming_benchmark_analysis.ipynb
-│   └── 03_real_dataset_analysis.ipynb
+│   ├── 03_real_dataset_analysis.ipynb
+│   ├── 05_needleman_wunsch_cpu.ipynb
+│   ├── 06_smith_waterman_cpu.ipynb
+│   ├── 07_needleman_wunsch_cuda.ipynb
+│   └── 08_smith_waterman_cuda.ipynb
 │
 ├── docs/
 │   ├── environment_setup.md
@@ -1171,6 +1296,9 @@ cuda-bioinformatics-accelerator/
 │   ├── memory_layout.md
 │   ├── cuda_kernels.md
 │   ├── dna_encoding.md
+│   ├── needleman_wunsch.md
+│   ├── needleman_wunsch_cuda.md
+│   ├── smith_waterman.md
 │   ├── smith_waterman_cuda.md
 │   ├── cuda_streams.md
 │   └── profiling.md
@@ -1179,7 +1307,9 @@ cuda-bioinformatics-accelerator/
 │   ├── test_hamming.cpp
 │   ├── test_dna_encoding.cpp
 │   ├── test_needleman_wunsch.cpp
-│   └── test_smith_waterman.cpp
+│   ├── test_needleman_wunsch_gpu.cpp
+│   ├── test_smith_waterman.cpp
+│   └── test_smith_waterman_gpu.cpp
 │
 ├── assets/
 │   ├── benchmark_charts/
@@ -1438,7 +1568,7 @@ An AI agent working on this repository must follow these rules:
 5. Do not optimize before correctness is verified.
 6. Do not introduce complex abstractions too early.
 7. Start with fixed-length sequences before variable-length sequences.
-8. Start with Hamming Distance before Smith-Waterman.
+8. Start with Hamming Distance, then Needleman-Wunsch, then Smith-Waterman.
 9. Always include CUDA error checking.
 10. Always include benchmark output.
 11. Always validate GPU results against CPU results.

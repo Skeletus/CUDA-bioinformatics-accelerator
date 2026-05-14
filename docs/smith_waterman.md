@@ -261,8 +261,9 @@ Phase 9 is CPU-only. It does not implement:
 
 Future work includes:
 
-* CUDA implementation.
-* Wavefront parallelism.
+* Phase 11 Smith-Waterman CUDA implementation after Phase 10 Needleman-Wunsch CUDA.
+* Wavefront parallelism using the same anti-diagonal structure as Needleman-Wunsch.
+* Local-alignment reset behavior in the GPU dynamic programming transition.
 * Shared memory tiling.
 * Real genomic fragment alignment.
 * Rolling-row batching improvements.
