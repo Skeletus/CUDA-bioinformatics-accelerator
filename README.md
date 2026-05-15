@@ -1124,6 +1124,66 @@ assets/benchmark_charts/needleman_wunsch_gpu/
 
 ---
 
+### Phase 10.1: Needleman-Wunsch CUDA Pipeline Optimization
+
+Goal:
+
+Improve the Phase 10 Needleman-Wunsch CUDA execution pipeline without changing the core shared-memory wavefront algorithm.
+
+Implemented scope:
+
+* Pinned host staging buffers for sequence and score transfers.
+* Optional `cudaMallocAsync` / `cudaFreeAsync` with explicit fallback reporting.
+* Reusable per-stream device buffer pools.
+* Configurable batched execution with `--batch-size`.
+* CUDA stream rotation with `--num-streams`.
+* Detailed timing for file read, validation, allocation, copies, kernel execution, CSV output, cleanup, and end-to-end runtime.
+* Benchmark comparison against the baseline Needleman-Wunsch GPU executable and the CPU reference.
+
+Deliverables:
+
+```text
+src/needleman_wunsch_gpu_optimized.cu
+benchmarks/run_needleman_wunsch_gpu_optimized_benchmark.py
+scripts/plot_needleman_wunsch_gpu_optimized_benchmark.py
+docs/needleman_wunsch_cuda_optimization.md
+notebooks/08_needleman_wunsch_cuda_optimization.ipynb
+```
+
+Phase 10.1 commands:
+
+```bash
+nvcc src/needleman_wunsch_gpu_optimized.cu \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o needleman_wunsch_gpu_optimized
+
+./needleman_wunsch_gpu_optimized \
+  data/synthetic/synthetic_pairs_64.txt \
+  results/needleman_wunsch/needleman_wunsch_gpu_optimized_results.csv \
+  --repetitions 5 \
+  --batch-size 1024 \
+  --num-streams 2 \
+  --summary-only
+
+python benchmarks/run_needleman_wunsch_gpu_optimized_benchmark.py
+
+python scripts/plot_needleman_wunsch_gpu_optimized_benchmark.py
+```
+
+Outputs:
+
+```text
+results/needleman_wunsch/
+benchmarks/needleman_wunsch_gpu_optimized_benchmark_results.csv
+assets/benchmark_charts/needleman_wunsch_gpu_optimized/
+```
+
+Phase 10.1 optimizes transfer and allocation overhead, but it does not remove the current shared-memory sequence-length limit. Longer sequence support is deferred to a later DP-memory redesign.
+
+---
+
 ### Phase 11: Smith-Waterman CUDA Prototype
 
 Goal:
