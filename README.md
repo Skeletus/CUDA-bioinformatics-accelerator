@@ -1251,18 +1251,19 @@ Phase 10.2 changes the DP storage architecture. Unlike Phase 10.1, it directly a
 
 Goal:
 
-Implement a CUDA version of Smith-Waterman.
+Implement a CUDA version of Smith-Waterman local alignment.
 
-Smith-Waterman builds on the same dynamic programming and wavefront ideas used in Needleman-Wunsch, but adds local alignment behavior by resetting negative scores to zero and returning the maximum value in the DP matrix.
+Smith-Waterman builds on the same dynamic programming dependency pattern used in Needleman-Wunsch, so wavefront parallelism can be reused. The important difference is semantic: Smith-Waterman performs local alignment, resets negative DP values to zero, and returns the maximum value anywhere in the matrix instead of `dp[m][n]`.
 
-Tasks:
+Implemented scope:
 
-* Start with one block per sequence pair.
-* Use wavefront parallelism.
-* Use shared memory where appropriate.
-* Support fixed-length sequences first.
-* Validate against CPU Smith-Waterman.
-* Benchmark performance.
+* Baseline and wavefront CUDA modes.
+* One CUDA block per fixed-length sequence pair.
+* Shared-memory DP matrices for sequence lengths up to 64.
+* Local-alignment reset behavior with `max(0, diagonal, up, left)`.
+* Per-thread local maximum tracking plus block-level maximum reduction.
+* CPU/GPU correctness validation against the Phase 9 Smith-Waterman reference.
+* GPU benchmark script and benchmark charts.
 
 Deliverables:
 
@@ -1284,6 +1285,42 @@ Important CUDA concepts:
 * Register pressure.
 * Occupancy considerations.
 * Memory bandwidth.
+
+Phase 11 commands:
+
+```bash
+nvcc src/smith_waterman_gpu.cu \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o smith_waterman_gpu
+
+g++ src/smith_waterman_cpu.cpp \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o smith_waterman_cpu
+
+g++ tests/test_smith_waterman_gpu.cpp \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o test_smith_waterman_gpu
+
+./test_smith_waterman_gpu
+
+python benchmarks/run_smith_waterman_gpu_benchmark.py
+
+python scripts/plot_smith_waterman_gpu_benchmark.py
+```
+
+Outputs:
+
+```text
+results/smith_waterman/
+benchmarks/smith_waterman_gpu_benchmark_results.csv
+assets/benchmark_charts/smith_waterman_gpu/
+```
 
 ---
 
