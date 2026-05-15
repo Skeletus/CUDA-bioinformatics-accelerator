@@ -1184,6 +1184,69 @@ Phase 10.1 optimizes transfer and allocation overhead, but it does not remove th
 
 ---
 
+### Phase 10.2: Needleman-Wunsch CUDA Longer Sequence Support
+
+Goal:
+
+Extend Needleman-Wunsch CUDA beyond the shared-memory-only prototype by changing the DP memory architecture.
+
+Why this phase is needed:
+
+* Phase 10 established a correct shared-memory wavefront implementation.
+* Phase 10.1 improved transfer, allocation, batching, and stream behavior around that implementation.
+* Neither phase removed the sequence-length ceiling caused by storing a full DP matrix in shared memory.
+
+Implemented scope:
+
+* `global_matrix` mode with a full DP matrix in global memory.
+* `rolling_diagonal` mode with three global-memory diagonal buffers for score-only alignment.
+* Experimental `tiled_wavefront` mode that processes tile dependencies in wavefront order.
+* Longer-sequence timing, memory reporting, and correctness validation against the CPU reference.
+* Benchmark coverage that keeps unsupported shared-memory workloads visible.
+
+Deliverables:
+
+```text
+src/needleman_wunsch_gpu_longseq.cu
+benchmarks/run_needleman_wunsch_longseq_benchmark.py
+scripts/plot_needleman_wunsch_longseq_benchmark.py
+docs/needleman_wunsch_longseq.md
+notebooks/09_needleman_wunsch_longseq.ipynb
+```
+
+Phase 10.2 commands:
+
+```bash
+nvcc src/needleman_wunsch_gpu_longseq.cu \
+  -O3 \
+  -std=c++17 \
+  -I src/common \
+  -o needleman_wunsch_gpu_longseq
+
+./needleman_wunsch_gpu_longseq \
+  data/synthetic/synthetic_pairs_128.txt \
+  results/needleman_wunsch/needleman_wunsch_gpu_longseq_results.csv \
+  --implementation rolling_diagonal \
+  --repetitions 3 \
+  --summary-only
+
+python benchmarks/run_needleman_wunsch_longseq_benchmark.py --quick
+
+python scripts/plot_needleman_wunsch_longseq_benchmark.py
+```
+
+Outputs:
+
+```text
+results/needleman_wunsch/
+benchmarks/needleman_wunsch_longseq_benchmark_results.csv
+assets/benchmark_charts/needleman_wunsch_longseq/
+```
+
+Phase 10.2 changes the DP storage architecture. Unlike Phase 10.1, it directly addresses the longer-sequence limitation rather than only optimizing the surrounding execution pipeline.
+
+---
+
 ### Phase 11: Smith-Waterman CUDA Prototype
 
 Goal:
